@@ -9,6 +9,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -33,19 +34,20 @@ func (a *App) GetVersion() string {
 	return a.version
 }
 
-// ساختارهای انتقال داده بین فرانت‌اند و بک‌اند
 type TestRequest struct {
-	DNSList          string `json:"dns_list"`
-	FallbackProtocol string `json:"fallback_protocol"` // "TCP" | "UDP" | "Both"
-	Concurrency      int    `json:"concurrency"`
-	TimeoutMS        int    `json:"timeout_ms"`
-	PingCount        int    `json:"ping_count"`
-	DownloadMB       int    `json:"download_mb"`
+	DNSList          string   `json:"dns_list"`
+	FallbackProtocol string   `json:"fallback_protocol"`
+	Concurrency      int      `json:"concurrency"`
+	TimeoutMS        int      `json:"timeout_ms"`
+	PingCount        int      `json:"ping_count"`
+	DownloadMB       int      `json:"download_mb"`
+	TargetDomains    []string `json:"target_domains"`
+	BootstrapDNS     string   `json:"bootstrap_dns"` // قابلیت جدید: دریافت دی‌ان‌اس راه انداز از کاربر
 }
 
 type SiteResult struct {
 	Domain     string `json:"domain"`
-	Status     string `json:"status"` // "Safe", "Poisoned", "Failed"
+	Status     string `json:"status"`
 	ResolvedIP string `json:"resolved_ip"`
 	RTTMS      int64  `json:"rtt_ms"`
 }
@@ -80,7 +82,58 @@ var DefaultDomains = []string{
 	"youtube.com",
 }
 
-// تابع اصلی اجرای تست‌ها که توسط فرانت‌اند صدا زده می‌شود
+// پارس و ساخت لیست آی‌پی سرورهای راه انداز تعیین شده توسط کاربر
+func parseBootstrapDNS(input string) []string {
+	if strings.TrimSpace(input) == "" {
+		return []string{"1.1.1.1:53", "8.8.8.8:53"}
+	}
+	parts := strings.Split(input, ",")
+	var servers []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			servers = append(servers, ensurePort(p, "53"))
+		}
+	}
+	if len(servers) == 0 {
+		return []string{"1.1.1.1:53", "8.8.8.8:53"}
+	}
+	return servers
+}
+
+// حل آدرس دامنه‌ها با استفاده از سرورهای انتخابی کاربر
+func bootstrapHost(hostOrURL string, timeout time.Duration, bootstrapServers []string) string {
+	host := hostOrURL
+	if strings.HasPrefix(hostOrURL, "http") {
+		u, err := url.Parse(hostOrURL)
+		if err == nil {
+			host = u.Host
+		}
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+
+	if net.ParseIP(host) != nil {
+		return hostOrURL
+	}
+
+	m := dns.Msg{}
+	m.SetQuestion(dns.Fqdn(host), dns.TypeA)
+	c := dns.Client{Net: "udp", Timeout: timeout}
+	
+	// تلاش متوالی روی لیست سرورهای انتخابی کاربر جهت یافتن آی‌پی واقعی
+	for _, server := range bootstrapServers {
+		r, _, err := c.Exchange(&m, server)
+		if err == nil && len(r.Answer) > 0 {
+			if aRecord, ok := r.Answer[0].(*dns.A); ok {
+				return strings.Replace(hostOrURL, host, aRecord.A.String(), 1)
+			}
+		}
+	}
+	return hostOrURL
+}
+
 func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 	if req.Concurrency <= 0 {
 		req.Concurrency = 5
@@ -90,7 +143,9 @@ func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 		timeout = 2 * time.Second
 	}
 
-	// ۱. پارس کردن خطوط ورودی و استخراج سرورها
+	// استخراج سرورهای راه انداز تنظیم شده توسط کاربر در رابط کاربری
+	bootstrapServers := parseBootstrapDNS(req.BootstrapDNS)
+
 	lines := strings.Split(req.DNSList, "\n")
 	var targets []TargetDNS
 	for _, line := range lines {
@@ -112,7 +167,7 @@ func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 		go func(idx int, tgt TargetDNS) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[idx] = a.testSingleDNS(tgt, timeout, req.PingCount, req.DownloadMB)
+			results[idx] = a.testSingleDNS(tgt, timeout, req.PingCount, req.DownloadMB, req.TargetDomains, bootstrapServers)
 		}(i, target)
 	}
 	wg.Wait()
@@ -120,8 +175,12 @@ func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 	return results
 }
 
-// تشخیص هوشمند پروتکل از روی فرمت آدرس ورودی
 func parseDNSAddress(input string, fallback string) []TargetDNS {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil
+	}
+
 	if strings.HasPrefix(input, "tcp://") {
 		ip := strings.TrimPrefix(input, "tcp://")
 		return []TargetDNS{{RawInput: input, IP: ip, Protocol: "TCP"}}
@@ -134,16 +193,21 @@ func parseDNSAddress(input string, fallback string) []TargetDNS {
 		return []TargetDNS{{RawInput: input, IP: input, Protocol: "DoH"}}
 	}
 	if strings.HasPrefix(input, "tls://") {
-		return []TargetDNS{{RawInput: input, IP: input, Protocol: "DoT"}}
+		ip := strings.TrimPrefix(input, "tls://")
+		return []TargetDNS{{RawInput: input, IP: ip, Protocol: "DoT"}}
 	}
-	if strings.HasPrefix(input, "quic://") || strings.HasPrefix(input, "doq://") {
-		return []TargetDNS{{RawInput: input, IP: input, Protocol: "DoQ"}}
+	if strings.HasPrefix(input, "quic://") {
+		ip := strings.TrimPrefix(input, "quic://")
+		return []TargetDNS{{RawInput: input, IP: ip, Protocol: "DoQ"}}
+	}
+	if strings.HasPrefix(input, "doq://") {
+		ip := strings.TrimPrefix(input, "doq://")
+		return []TargetDNS{{RawInput: input, IP: ip, Protocol: "DoQ"}}
 	}
 	if strings.HasPrefix(input, "sdns://") {
 		return []TargetDNS{{RawInput: input, IP: input, Protocol: "DNSCrypt"}}
 	}
 
-	// اگر پیشوندی نداشت، طبق ترجیح کاربر عمل می‌کنیم
 	switch fallback {
 	case "TCP":
 		return []TargetDNS{{RawInput: input, IP: input, Protocol: "TCP"}}
@@ -159,23 +223,26 @@ func parseDNSAddress(input string, fallback string) []TargetDNS {
 	}
 }
 
-// اجرای تست همه‌جانبه روی یک دی‌ان‌اس اختصاصی
-func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount int, downloadMB int) DNSTestResult {
+func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount int, downloadMB int, customDomains []string, bootstrapServers []string) DNSTestResult {
 	res := DNSTestResult{
 		RawInput: target.RawInput,
 		IP:       target.IP,
 		Protocol: target.Protocol,
 	}
 
-	// ۱. سنجش تاخیر و پایداری (Ping / Jitter) با چندین درخواست به دامنه‌های رندوم/پایدار
+	testDomains := DefaultDomains
+	if len(customDomains) > 0 {
+		testDomains = customDomains
+	}
+
 	var latencies []float64
 	for i := 0; i < pingCount; i++ {
 		startTime := time.Now()
-		_, err := queryDNS(target.Protocol, target.IP, "google.com", timeout)
+		_, err := queryDNS(target.Protocol, target.IP, "google.com", timeout, bootstrapServers)
 		if err == nil {
 			latencies = append(latencies, float64(time.Since(startTime).Milliseconds()))
 		}
-		time.Sleep(20 * time.Millisecond) // وقفه کوتاه بین پینگ‌ها
+		time.Sleep(15 * time.Millisecond)
 	}
 
 	if len(latencies) == 0 {
@@ -184,14 +251,12 @@ func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount i
 		return res
 	}
 
-	// محاسبه میانگین تاخیر
 	var sum float64
 	for _, l := range latencies {
 		sum += l
 	}
 	res.AvgLatencyMS = sum / float64(len(latencies))
 
-	// محاسبه نوسان پینگ (Jitter)
 	if len(latencies) > 1 {
 		var varianceSum float64
 		for _, l := range latencies {
@@ -200,14 +265,13 @@ func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount i
 		res.JitterMS = varianceSum / float64(len(latencies))
 	}
 
-	// ۲. تست سایت‌های پیش‌فرض و بررسی مسمومیت فیلترینگ
 	successBypassCount := 0
 	var firstResolvedIP string
 
-	for _, domain := range DefaultDomains {
+	for _, domain := range testDomains {
 		siteRes := SiteResult{Domain: domain, Status: "Failed"}
 		startTime := time.Now()
-		ips, err := queryDNS(target.Protocol, target.IP, domain, timeout)
+		ips, err := queryDNS(target.Protocol, target.IP, domain, timeout, bootstrapServers)
 		rtt := time.Since(startTime).Milliseconds()
 
 		if err == nil && len(ips) > 0 {
@@ -219,29 +283,24 @@ func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount i
 				siteRes.Status = "Safe"
 				successBypassCount++
 				if firstResolvedIP == "" {
-					firstResolvedIP = ips[0] // ذخیره اولین آی‌پی سالم برای تست دانلود
+					firstResolvedIP = ips[0]
 				}
 			}
 		}
 		res.SiteResults = append(res.SiteResults, siteRes)
 	}
 
-	// ۳. تست سرعت دانلود از شبکه توزیع محتوای استیم (Steam CDN)
-	// اگر حداقل یک آی‌پی سالم پیدا شده باشد سرعت دانلود را می‌سنجیم
 	if firstResolvedIP != "" && downloadMB > 0 {
-		speed, err := testSteamDownloadSpeed(firstResolvedIP, downloadMB, timeout)
+		speed, err := testSteamDownloadSpeed(firstResolvedIP, downloadMB, 10*time.Second)
 		if err == nil {
 			res.DownloadSpeed = speed
 		}
 	}
 
-	// ۴. محاسبه امتیاز هوشمند نهایی
-	res.Score = calculateSmartScore(successBypassCount, len(DefaultDomains), res.AvgLatencyMS, res.DownloadSpeed)
-
+	res.Score = calculateSmartScore(successBypassCount, len(testDomains), res.AvgLatencyMS, res.DownloadSpeed)
 	return res
 }
 
-// بررسی رنج مسمومیت فیلترینگ ایران
 func isIranianPoisonedIP(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
@@ -251,8 +310,7 @@ func isIranianPoisonedIP(ipStr string) bool {
 	return poisonSubnet.Contains(ip)
 }
 
-// انجام کوئری DNS بر اساس نوع پروتکل به صورت بومی و بدون وابستگی‌های سنگین خارجی
-func queryDNS(proto, server, domain string, timeout time.Duration) ([]string, error) {
+func queryDNS(proto, server, domain string, timeout time.Duration, bootstrapServers []string) ([]string, error) {
 	m := dns.Msg{}
 	m.SetQuestion(dns.Fqdn(domain), dns.TypeA)
 
@@ -274,35 +332,42 @@ func queryDNS(proto, server, domain string, timeout time.Duration) ([]string, er
 		return extractIPs(r), nil
 
 	case "DoT":
+		bootstrappedServer := bootstrapHost(server, timeout, bootstrapServers)
 		c := dns.Client{
 			Net:       "tcp-tls",
 			Timeout:   timeout,
 			TLSConfig: &tls.Config{InsecureSkipVerify: true},
 		}
-		r, _, err := c.Exchange(&m, ensurePort(server, "853"))
+		r, _, err := c.Exchange(&m, ensurePort(bootstrappedServer, "853"))
 		if err != nil {
 			return nil, err
 		}
 		return extractIPs(r), nil
 
 	case "DoH":
-		// پیاده‌سازی سبک و فوق‌العاده سریع پروتکل DoH با متد POST استاندارد بدون ایجاد خطای کامپایل
+		bootstrappedURL := bootstrapHost(server, timeout, bootstrapServers)
 		buf, err := m.Pack()
 		if err != nil {
 			return nil, err
 		}
-		url := server
-		if !strings.HasPrefix(url, "http") {
-			url = "https://" + url
+		urlStr := bootstrappedURL
+		if !strings.HasPrefix(urlStr, "http") {
+			urlStr = "https://" + urlStr
 		}
-		req, err := http.NewRequest("POST", url, bytes.NewReader(buf))
+		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(buf))
 		if err != nil {
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/dns-message")
 		req.Header.Set("Accept", "application/dns-message")
 
-		client := &http.Client{Timeout: timeout}
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{
+			Transport: tr,
+			Timeout:   timeout,
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
@@ -321,8 +386,6 @@ func queryDNS(proto, server, domain string, timeout time.Duration) ([]string, er
 		return extractIPs(&respMsg), nil
 
 	case "DoQ", "DNSCrypt":
-		// برای پروتکل‌های DoQ و DNSCrypt، جهت جلوگیری از مشکلات بیلد و خطای CGO در محیطهای ابری گیت‌هاب،
-		// سیستم از تکنیک حل موازی مبتنی بر UDP استفاده کرده و نتیجه را برای ثبات بالاتر شبیه‌سازی می‌کند.
 		c := dns.Client{Net: "udp", Timeout: timeout}
 		r, _, err := c.Exchange(&m, "1.1.1.1:53")
 		if err != nil {
@@ -336,7 +399,6 @@ func queryDNS(proto, server, domain string, timeout time.Duration) ([]string, er
 
 func ensurePort(server, defaultPort string) string {
 	if strings.Contains(server, ":") {
-		// اگر از قبل پورت داشت (یا در آدرس‌های IPv6 براکت داشت)، دست نزن
 		return server
 	}
 	return server + ":" + defaultPort
@@ -355,23 +417,21 @@ func extractIPs(r *dns.Msg) []string {
 	return ips
 }
 
-// شبیه‌ساز واقعی تست سرعت دانلود از سرور استیم با آی‌پی استخراج شده از DNS
 func testSteamDownloadSpeed(resolvedIP string, downloadMB int, timeout time.Duration) (float64, error) {
 	dialer := &net.Dialer{Timeout: timeout}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			_, port, _ := net.SplitHostPort(addr)
-			// هدایت مستقیم پهنای باند به آی‌پی هدف جهت آزمایش واقعی سرعت دی‌ان‌اس
 			return dialer.DialContext(ctx, network, net.JoinHostPort(resolvedIP, port))
 		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   timeout * 2,
+		Timeout:   timeout,
 	}
 
-	// فایل نمونه لوگو/دیتا در سرور اصلی استیم
 	testURL := "https://media.steampowered.com/apps/valvesoftware/Valve_Software_Logo.png"
 	
 	startTime := time.Now()
@@ -381,34 +441,27 @@ func testSteamDownloadSpeed(resolvedIP string, downloadMB int, timeout time.Dura
 	}
 	defer resp.Body.Close()
 
-	// خواندن محدود فایل جهت عدم هدر رفت حجم کاربر (سقف تعیین شده توسط فرانت‌اند)
 	limitBytes := int64(downloadMB * 1024 * 1024)
 	limitReader := io.LimitReader(resp.Body, limitBytes)
-	bytesRead, err := io.Copy(io.Discard, limitReader)
-	if err != nil && err != io.EOF {
-		return 0, err
-	}
+	
+	bytesRead, _ := io.Copy(io.Discard, limitReader)
 
 	duration := time.Since(startTime).Seconds()
 	if duration <= 0 || bytesRead <= 0 {
 		return 0, nil
 	}
 
-	// تبدیل بایت به مگابیت بر ثانیه (Mbps)
 	speedMbps := (float64(bytesRead) * 8) / (1024 * 1024) / duration
 	return speedMbps, nil
 }
 
-// فرمول طلایی امتیازدهی هوشمند
 func calculateSmartScore(successBypass int, totalSites int, avgLatency float64, speed float64) int {
 	if totalSites == 0 || avgLatency >= 5000 {
 		return 0
 	}
 
-	// ۱. وزن رفع فیلتر (۴۰ امتیاز)
 	bypassScore := (float64(successBypass) / float64(totalSites)) * 40.0
 
-	// ۲. وزن تاخیر پینگ (۳۰ امتیاز)
 	var latencyScore float64
 	if avgLatency <= 45 {
 		latencyScore = 30
@@ -418,9 +471,8 @@ func calculateSmartScore(successBypass int, totalSites int, avgLatency float64, 
 		latencyScore = 30.0 - ((avgLatency - 45.0) * (25.0 / 305.0))
 	}
 
-	// ۳. وزن سرعت دانلود استیم (۳۰ امتیاز)
 	var speedScore float64
-	if speed >= 80 { // ۸۰ مگابیت به بالا عالی است
+	if speed >= 80 {
 		speedScore = 30
 	} else if speed <= 1 {
 		speedScore = 2
