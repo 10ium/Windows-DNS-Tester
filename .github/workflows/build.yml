@@ -3,10 +3,10 @@ name: Build and Release Windows App
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # این بخش دکمه اجرای دستی را در سایت گیت‌هاب فعال می‌کند
+  workflow_dispatch:
 
 permissions:
-  contents: write # اعطای مجوز به گیت‌هاب برای ایجاد نسخه ریلیز و آپلود فایل .exe
+  contents: write
 
 jobs:
   build-and-release:
@@ -17,7 +17,6 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set Version Environment Variable
-      # تولید اتوماتیک نسخه بر اساس شماره اجرای اکشن (مثلا v1.0.12)
       run: echo "APP_VERSION=v1.0.${{ github.run_number }}" >> $env:GITHUB_ENV
       shell: powerShell
 
@@ -26,23 +25,49 @@ jobs:
       with:
         go-version: '1.21'
 
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Python Pillow
+      run: pip install Pillow
+
+    - name: Generate Custom App Icon with Code
+      # اجرای اسکریپت پایتون بومی جهت تولید آیکون گرافیکی شبکه (سپر حفاظتی بنفش + صاعقه فیروزه‌ای پرسرعت)
+      run: |
+        python -c "
+        from PIL import Image, ImageDraw
+        img = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        # پس‌زمینه مربعی دایره‌ای تیره ملایم
+        draw.rounded_rectangle([32, 32, 480, 480], radius=100, fill=(30, 27, 75, 255))
+        # ترسیم سپر خارجی (نماد ایمنی DNS)
+        shield_pts = [(256, 80), (410, 150), (410, 320), (256, 440), (102, 320), (102, 150)]
+        draw.polygon(shield_pts, fill=(79, 70, 229, 255))
+        # سپر داخلی برای ایجاد افکت عمق دوبعدی
+        inner_shield = [(256, 105), (385, 165), (385, 305), (256, 415), (127, 305), (127, 165)]
+        draw.polygon(inner_shield, fill=(30, 27, 75, 255))
+        # صاعقه فیروزه‌ای درخشان در مرکز (نماد سرعت خیره‌کننده دی‌ان‌اس)
+        lightning = [(256, 130), (330, 240), (275, 240), (295, 380), (182, 270), (237, 270)]
+        draw.polygon(lightning, fill=(34, 211, 238, 255))
+        img.save('appicon.png')
+        "
+      shell: bash
+
     - name: Install Wails CLI
-      # نصب فریم ورک بیلد ویندوز
       run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
     - name: Build Windows Executable
-      # تزریق نسخه ساخته شده به متغیر ورژن در فایل main.go
       run: |
         wails build -platform windows/amd64 -ldflags "-X 'main.Version=${{ env.APP_VERSION }}'"
 
     - name: Rename Output Executable
-      # تغییر نام فایل نهایی برای جذابیت و درج شماره نسخه در نام آن
       run: |
         mv build/bin/my-dns-tester.exe build/bin/dns-tester-${{ env.APP_VERSION }}.exe
       shell: powerShell
 
     - name: Create GitHub Release and Upload Asset
-      # ساخت خودکار ریلیز و آپلود فایل .exe نهایی
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.APP_VERSION }}
