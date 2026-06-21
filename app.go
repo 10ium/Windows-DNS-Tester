@@ -34,6 +34,23 @@ func (a *App) GetVersion() string {
 	return a.version
 }
 
+// متغیرهای سراسری برای کنترل و لغو تسک‌ها (مشابه ابزار برگُزین)
+var (
+	activeCancel context.CancelFunc
+	activeMutex  sync.Mutex
+)
+
+// متد لغو آنی تمام تست‌های در حال اجرا
+func (a *App) AbortAllTasks() {
+	activeMutex.Lock()
+	defer activeMutex.Unlock()
+	if activeCancel != nil {
+		activeCancel()
+		activeCancel = nil
+		fmt.Println("All active DNS and download tasks aborted successfully.")
+	}
+}
+
 type TestRequest struct {
 	DNSList          string   `json:"dns_list"`
 	FallbackProtocol string   `json:"fallback_protocol"`
@@ -42,12 +59,12 @@ type TestRequest struct {
 	PingCount        int      `json:"ping_count"`
 	DownloadMB       int      `json:"download_mb"`
 	TargetDomains    []string `json:"target_domains"`
-	BootstrapDNS     string   `json:"bootstrap_dns"` // قابلیت جدید: دریافت دی‌ان‌اس راه انداز از کاربر
+	BootstrapDNS     string   `json:"bootstrap_dns"`
 }
 
 type SiteResult struct {
 	Domain     string `json:"domain"`
-	Status     string `json:"status"`
+	Status     string `json:"status"` // "Safe" | "Sanctioned" | "Poisoned" | "Failed"
 	ResolvedIP string `json:"resolved_ip"`
 	RTTMS      int64  `json:"rtt_ms"`
 }
@@ -82,7 +99,6 @@ var DefaultDomains = []string{
 	"youtube.com",
 }
 
-// پارس و ساخت لیست آی‌پی سرورهای راه انداز تعیین شده توسط کاربر
 func parseBootstrapDNS(input string) []string {
 	if strings.TrimSpace(input) == "" {
 		return []string{"1.1.1.1:53", "8.8.8.8:53"}
@@ -101,8 +117,7 @@ func parseBootstrapDNS(input string) []string {
 	return servers
 }
 
-// حل آدرس دامنه‌ها با استفاده از سرورهای انتخابی کاربر
-func bootstrapHost(hostOrURL string, timeout time.Duration, bootstrapServers []string) string {
+func bootstrapHost(ctx context.Context, hostOrURL string, timeout time.Duration, bootstrapServers []string) string {
 	host := hostOrURL
 	if strings.HasPrefix(hostOrURL, "http") {
 		u, err := url.Parse(hostOrURL)
@@ -122,9 +137,12 @@ func bootstrapHost(hostOrURL string, timeout time.Duration, bootstrapServers []s
 	m.SetQuestion(dns.Fqdn(host), dns.TypeA)
 	c := dns.Client{Net: "udp", Timeout: timeout}
 	
-	// تلاش متوالی روی لیست سرورهای انتخابی کاربر جهت یافتن آی‌پی واقعی
 	for _, server := range bootstrapServers {
-		r, _, err := c.Exchange(&m, server)
+		// بررسی لغو تسک قبل از ارسال پکت
+		if ctx.Err() != nil {
+			return hostOrURL
+		}
+		r, _, err := c.ExchangeContext(ctx, &m, server)
 		if err == nil && len(r.Answer) > 0 {
 			if aRecord, ok := r.Answer[0].(*dns.A); ok {
 				return strings.Replace(hostOrURL, host, aRecord.A.String(), 1)
@@ -135,6 +153,14 @@ func bootstrapHost(hostOrURL string, timeout time.Duration, bootstrapServers []s
 }
 
 func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
+	// لغو تسک‌های قبلی در صورت وجود
+	a.AbortAllTasks()
+
+	activeMutex.Lock()
+	var ctx context.Context
+	ctx, activeCancel = context.WithCancel(context.Background())
+	activeMutex.Unlock()
+
 	if req.Concurrency <= 0 {
 		req.Concurrency = 5
 	}
@@ -143,7 +169,6 @@ func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 		timeout = 2 * time.Second
 	}
 
-	// استخراج سرورهای راه انداز تنظیم شده توسط کاربر در رابط کاربری
 	bootstrapServers := parseBootstrapDNS(req.BootstrapDNS)
 
 	lines := strings.Split(req.DNSList, "\n")
@@ -162,12 +187,20 @@ func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 	sem := make(chan struct{}, req.Concurrency)
 
 	for i, target := range targets {
+		if ctx.Err() != nil {
+			break
+		}
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(idx int, tgt TargetDNS) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[idx] = a.testSingleDNS(tgt, timeout, req.PingCount, req.DownloadMB, req.TargetDomains, bootstrapServers)
+
+			if ctx.Err() != nil {
+				results[idx] = DNSTestResult{RawInput: tgt.RawInput, IP: tgt.IP, Protocol: tgt.Protocol, AvgLatencyMS: 9999, Score: 0}
+				return
+			}
+			results[idx] = a.testSingleDNS(ctx, tgt, timeout, req.PingCount, req.DownloadMB, req.TargetDomains, bootstrapServers)
 		}(i, target)
 	}
 	wg.Wait()
@@ -223,7 +256,7 @@ func parseDNSAddress(input string, fallback string) []TargetDNS {
 	}
 }
 
-func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount int, downloadMB int, customDomains []string, bootstrapServers []string) DNSTestResult {
+func (a *App) testSingleDNS(ctx context.Context, target TargetDNS, timeout time.Duration, pingCount int, downloadMB int, customDomains []string, bootstrapServers []string) DNSTestResult {
 	res := DNSTestResult{
 		RawInput: target.RawInput,
 		IP:       target.IP,
@@ -237,8 +270,12 @@ func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount i
 
 	var latencies []float64
 	for i := 0; i < pingCount; i++ {
+		if ctx.Err() != nil {
+			res.AvgLatencyMS = 9999
+			return res
+		}
 		startTime := time.Now()
-		_, err := queryDNS(target.Protocol, target.IP, "google.com", timeout, bootstrapServers)
+		_, err := queryDNS(ctx, target.Protocol, target.IP, "google.com", timeout, bootstrapServers)
 		if err == nil {
 			latencies = append(latencies, float64(time.Since(startTime).Milliseconds()))
 		}
@@ -269,29 +306,41 @@ func (a *App) testSingleDNS(target TargetDNS, timeout time.Duration, pingCount i
 	var firstResolvedIP string
 
 	for _, domain := range testDomains {
+		if ctx.Err() != nil {
+			break
+		}
 		siteRes := SiteResult{Domain: domain, Status: "Failed"}
 		startTime := time.Now()
-		ips, err := queryDNS(target.Protocol, target.IP, domain, timeout, bootstrapServers)
+		ips, err := queryDNS(ctx, target.Protocol, target.IP, domain, timeout, bootstrapServers)
 		rtt := time.Since(startTime).Milliseconds()
 
 		if err == nil && len(ips) > 0 {
 			siteRes.ResolvedIP = ips[0]
 			siteRes.RTTMS = rtt
+			
 			if isIranianPoisonedIP(ips[0]) {
 				siteRes.Status = "Poisoned"
 			} else {
-				siteRes.Status = "Safe"
-				successBypassCount++
-				if firstResolvedIP == "" {
-					firstResolvedIP = ips[0]
+				// تفکیک هوشمند تحریم از فیلترینگ با تکیه بر متد بررسی کدهای HTTP برگشتی (مشابه پروژه برگُزین)
+				statusCode, httpErr := checkURLWithResolvedIP(ctx, domain, ips[0], timeout)
+				if httpErr != nil {
+					siteRes.Status = "Failed"
+				} else if statusCode == 403 {
+					siteRes.Status = "Sanctioned" // تحریم شده
+				} else {
+					siteRes.Status = "Safe" // کاملا باز و سالم
+					successBypassCount++
+					if firstResolvedIP == "" {
+						firstResolvedIP = ips[0]
+					}
 				}
 			}
 		}
 		res.SiteResults = append(res.SiteResults, siteRes)
 	}
 
-	if firstResolvedIP != "" && downloadMB > 0 {
-		speed, err := testSteamDownloadSpeed(firstResolvedIP, downloadMB, 10*time.Second)
+	if firstResolvedIP != "" && downloadMB > 0 && ctx.Err() == nil {
+		speed, err := testSteamDownloadSpeed(ctx, firstResolvedIP, downloadMB, 10*time.Second)
 		if err == nil {
 			res.DownloadSpeed = speed
 		}
@@ -310,14 +359,55 @@ func isIranianPoisonedIP(ipStr string) bool {
 	return poisonSubnet.Contains(ip)
 }
 
-func queryDNS(proto, server, domain string, timeout time.Duration, bootstrapServers []string) ([]string, error) {
+// متد کمکی برای تست فیزیکی دسترسی به دامنه‌های تحریم‌شده (۴۰۳) یا فیلترشده با آی‌پی حل‌شده
+func checkURLWithResolvedIP(ctx context.Context, domain, resolvedIP string, timeout time.Duration) (int, error) {
+	dialer := &net.Dialer{Timeout: timeout}
+	transport := &http.Transport{
+		DialContext: func(cCtx context.Context, network, addr string) (net.Conn, error) {
+			_, port, _ := net.SplitHostPort(addr)
+			return dialer.DialContext(cCtx, network, net.JoinHostPort(resolvedIP, port))
+		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+	}
+
+	// تست آدرس به صورت امن (HTTPS)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://"+domain, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Bargozin-DNS-Tester)")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// در صورت بروز خطای لایه امنیتی، تلاش مجدد روی HTTP خام
+		reqHTTP, errHTTP := http.NewRequestWithContext(ctx, "GET", "http://"+domain, nil)
+		if errHTTP != nil {
+			return 0, errHTTP
+		}
+		reqHTTP.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Bargozin-DNS-Tester)")
+		respHTTP, errHTTP := client.Do(reqHTTP)
+		if errHTTP != nil {
+			return 0, errHTTP
+		}
+		defer respHTTP.Body.Close()
+		return respHTTP.StatusCode, nil
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+func queryDNS(ctx context.Context, proto, server, domain string, timeout time.Duration, bootstrapServers []string) ([]string, error) {
 	m := dns.Msg{}
 	m.SetQuestion(dns.Fqdn(domain), dns.TypeA)
 
 	switch proto {
 	case "UDP":
 		c := dns.Client{Net: "udp", Timeout: timeout}
-		r, _, err := c.Exchange(&m, ensurePort(server, "53"))
+		r, _, err := c.ExchangeContext(ctx, &m, ensurePort(server, "53"))
 		if err != nil {
 			return nil, err
 		}
@@ -325,27 +415,27 @@ func queryDNS(proto, server, domain string, timeout time.Duration, bootstrapServ
 
 	case "TCP":
 		c := dns.Client{Net: "tcp", Timeout: timeout}
-		r, _, err := c.Exchange(&m, ensurePort(server, "53"))
+		r, _, err := c.ExchangeContext(ctx, &m, ensurePort(server, "53"))
 		if err != nil {
 			return nil, err
 		}
 		return extractIPs(r), nil
 
 	case "DoT":
-		bootstrappedServer := bootstrapHost(server, timeout, bootstrapServers)
+		bootstrappedServer := bootstrapHost(ctx, server, timeout, bootstrapServers)
 		c := dns.Client{
 			Net:       "tcp-tls",
 			Timeout:   timeout,
 			TLSConfig: &tls.Config{InsecureSkipVerify: true},
 		}
-		r, _, err := c.Exchange(&m, ensurePort(bootstrappedServer, "853"))
+		r, _, err := c.ExchangeContext(ctx, &m, ensurePort(bootstrappedServer, "853"))
 		if err != nil {
 			return nil, err
 		}
 		return extractIPs(r), nil
 
 	case "DoH":
-		bootstrappedURL := bootstrapHost(server, timeout, bootstrapServers)
+		bootstrappedURL := bootstrapHost(ctx, server, timeout, bootstrapServers)
 		buf, err := m.Pack()
 		if err != nil {
 			return nil, err
@@ -354,7 +444,7 @@ func queryDNS(proto, server, domain string, timeout time.Duration, bootstrapServ
 		if !strings.HasPrefix(urlStr, "http") {
 			urlStr = "https://" + urlStr
 		}
-		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(buf))
+		req, err := http.NewRequestWithContext(ctx, "POST", urlStr, bytes.NewReader(buf))
 		if err != nil {
 			return nil, err
 		}
@@ -387,7 +477,7 @@ func queryDNS(proto, server, domain string, timeout time.Duration, bootstrapServ
 
 	case "DoQ", "DNSCrypt":
 		c := dns.Client{Net: "udp", Timeout: timeout}
-		r, _, err := c.Exchange(&m, "1.1.1.1:53")
+		r, _, err := c.ExchangeContext(ctx, &m, "1.1.1.1:53")
 		if err != nil {
 			return nil, err
 		}
@@ -417,12 +507,12 @@ func extractIPs(r *dns.Msg) []string {
 	return ips
 }
 
-func testSteamDownloadSpeed(resolvedIP string, downloadMB int, timeout time.Duration) (float64, error) {
+func testSteamDownloadSpeed(ctx context.Context, resolvedIP string, downloadMB int, timeout time.Duration) (float64, error) {
 	dialer := &net.Dialer{Timeout: timeout}
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		DialContext: func(cCtx context.Context, network, addr string) (net.Conn, error) {
 			_, port, _ := net.SplitHostPort(addr)
-			return dialer.DialContext(ctx, network, net.JoinHostPort(resolvedIP, port))
+			return dialer.DialContext(cCtx, network, net.JoinHostPort(resolvedIP, port))
 		},
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
