@@ -1,394 +1,847 @@
 <!DOCTYPE html>
-<html lang="fa" class="dark">
+<html lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart DNS Tester</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Vazirmatn', sans-serif; }
-    </style>
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
-</head>
-<body x-data="dnsTester()" class="min-h-screen transition-colors duration-300 bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100" :dir="lang === 'fa' ? 'rtl' : 'ltr'">
+        /* استایل‌های کاملا آفلاین و بومی (Vanilla CSS) برای پایداری ۱۰۰٪ بدون نیاز به اینترنت */
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card-dark: #1e293b;
+            --border-dark: #334155;
+            --text-dark: #f1f5f9;
+            --text-muted-dark: #94a3b8;
+            
+            --bg-light: #f8fafc;
+            --bg-card-light: #ffffff;
+            --border-light: #e2e8f0;
+            --text-light: #1e293b;
+            --text-muted-light: #64748b;
 
-    <header class="border-b border-slate-200 dark:border-slate-800 p-4">
-        <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                <h1 class="text-xl font-bold tracking-tight" x-text="t[lang].title"></h1>
-            </div>
-            <div class="flex gap-2">
-                <button @click="toggleLang()" class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium" x-text="lang === 'fa' ? 'English' : 'فارسی'"></button>
-                <button @click="toggleTheme()" class="p-2 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <template x-if="dark">
-                        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
-                    </template>
-                    <template x-if="!dark">
-                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-                    </template>
-                </button>
-            </div>
+            --indigo: #6366f1;
+            --indigo-hover: #4f46e5;
+            --rose: #f43f5e;
+            --emerald: #10b981;
+            --amber: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        /* مدیریت تم تاریک و روشن */
+        body.dark {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
+        }
+        body.light {
+            background-color: var(--bg-light);
+            color: var(--text-light);
+        }
+
+        body[dir="rtl"] { text-align: right; }
+        body[dir="ltr"] { text-align: left; }
+
+        header {
+            border-b: 1px solid;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        body.dark header { border-bottom-color: var(--border-dark); }
+        body.light header { border-bottom-color: var(--border-light); }
+
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-toggle {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid;
+            background: transparent;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        body.dark .btn-toggle { border-color: var(--border-dark); color: var(--text-dark); }
+        body.light .btn-toggle { border-color: var(--border-light); color: var(--text-light); }
+        .btn-toggle:hover { background-color: rgba(99, 102, 241, 0.1); }
+
+        /* ساختار گرید اصلی */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 16px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 1fr 2fr;
+            }
+        }
+
+        /* کارت‌ها */
+        .card {
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        body.dark .card { background-color: var(--bg-card-dark); border-color: var(--border-dark); }
+        body.light .card { background-color: var(--bg-card-light); border-color: var(--border-light); }
+
+        /* فرم‌ها و ورودی‌ها */
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        textarea, input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid;
+            background-color: transparent;
+            font-size: 13px;
+            outline: none;
+        }
+        body.dark textarea, body.dark input { border-color: var(--border-dark); color: var(--text-dark); background-color: rgba(15, 23, 42, 0.5); }
+        body.light textarea, body.light input { border-color: var(--border-light); color: var(--text-light); background-color: var(--bg-light); }
+        textarea:focus, input:focus { border-color: var(--indigo); }
+
+        /* دکمه‌های کنترل پروتکل */
+        .protocol-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .btn-proto {
+            padding: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 8px;
+            border: 1px solid;
+            cursor: pointer;
+            background: transparent;
+        }
+        body.dark .btn-proto { border-color: var(--border-dark); color: var(--text-dark); }
+        body.light .btn-proto { border-color: var(--border-light); color: var(--text-light); }
+        .btn-proto.active { background-color: var(--indigo); color: white; border-color: var(--indigo); }
+
+        /* بخش تنظیمات کشویی */
+        .advanced-toggle {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--indigo);
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .advanced-panel {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-t: 1px solid;
+            gap: 12px;
+            flex-direction: column;
+        }
+        body.dark .advanced-panel { border-top: 1px solid var(--border-dark); }
+        body.light .advanced-panel { border-top: 1px solid var(--border-light); }
+        .advanced-panel.show { display: flex; }
+
+        /* دکمه‌های اصلی عیب‌یابی و لغو */
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            color: white;
+            margin-top: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.1s;
+        }
+        .btn-action:active { transform: scale(0.98); }
+        .btn-run { background-color: var(--indigo); }
+        .btn-run:hover { background-color: var(--indigo-hover); }
+        .btn-abort { background-color: var(--rose); }
+
+        /* نوار پیشرفت صوتی */
+        .progress-container {
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid;
+            margin-bottom: 16px;
+        }
+        body.dark .progress-container { background-color: var(--bg-card-dark); border-color: var(--border-dark); }
+        body.light .progress-container { background-color: var(--bg-card-light); border-color: var(--border-light); }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 8px;
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+        body.dark .progress-bar-bg { background-color: var(--bg-dark); }
+        body.light .progress-bar-bg { background-color: var(--border-light); }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: var(--indigo);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* پنل اعمال هوشمند دی‌ان‌اس‌ها */
+        .magic-apply-panel {
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid;
+            margin-bottom: 16px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+        body.dark .magic-apply-panel { background-color: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.2); }
+        body.light .magic-apply-panel { background-color: #f0f2fe; border-color: #c7d2fe; }
+        .magic-apply-desc { font-size: 12px; font-weight: bold; }
+        .btn-magic {
+            background-color: var(--indigo);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-magic:hover { background-color: var(--indigo-hover); }
+
+        /* خالی بودن نتایج */
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            border-radius: 16px;
+            border: 1px dashed;
+        }
+        body.dark .empty-state { border-color: var(--border-dark); color: var(--text-muted-dark); }
+        body.light .empty-state { border-color: var(--border-light); color: var(--text-muted-light); }
+
+        /* کارت‌های دی‌ان‌اس‌های تست شده */
+        .dns-card {
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid;
+            margin-bottom: 16px;
+        }
+        body.dark .dns-card { background-color: var(--bg-card-dark); border-color: var(--border-dark); }
+        body.light .dns-card { background-color: var(--bg-card-light); border-color: var(--border-light); }
+        .dns-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .dns-badge {
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            background-color: rgba(99, 102, 241, 0.15);
+            color: var(--indigo);
+        }
+        .dns-ip { font-family: monospace; font-weight: bold; font-size: 15px; margin: 0 8px; }
+        .dns-score { font-size: 20px; font-weight: 900; color: var(--indigo); }
+        
+        .dns-card-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            font-size: 13px;
+            padding-top: 12px;
+            margin-bottom: 16px;
+            border-top: 1px solid;
+        }
+        body.dark .dns-card-meta { border-top-color: rgba(255,255,255,0.05); }
+        body.light .dns-card-meta { border-top-color: rgba(0,0,0,0.05); }
+
+        /* دکمه ست کردن تکی سیستم */
+        .btn-set-system {
+            background-color: rgba(99, 102, 241, 0.1);
+            color: var(--indigo);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-set-system:hover { background-color: var(--indigo); color: white; border-color: var(--indigo); }
+
+        /* گرید وضعیت دامنه‌ها */
+        .sites-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            padding-top: 12px;
+            border-top: 1px dashed;
+        }
+        @media (min-width: 480px) {
+            .sites-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        body.dark .sites-grid { border-top-color: rgba(255,255,255,0.05); }
+        body.light .sites-grid { border-top-color: rgba(0,0,0,0.05); }
+
+        .site-badge {
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        body.dark .site-badge { background-color: rgba(15, 23, 42, 0.3); }
+        body.light .site-badge { background-color: var(--bg-light); }
+        .site-domain { font-weight: 500; color: var(--text-muted-light); word-break: break-all; }
+        body.dark .site-domain { color: var(--text-muted-dark); }
+        
+        /* رنگ‌آمیزی متمایز ۳ وضعیت فیلتر، تحریم و باز */
+        .status-safe { color: var(--emerald); font-weight: bold; }
+        .status-sanctioned { color: var(--amber); font-weight: bold; }
+        .status-poisoned { color: var(--rose); font-weight: 900; }
+        .status-failed { color: #94a3b8; font-weight: bold; }
+
+        footer {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted-light);
+            padding: 24px;
+            border-t: 1px solid;
+            margin-top: 32px;
+        }
+        body.dark footer { border-top: 1px solid var(--border-dark); color: var(--text-muted-dark); }
+        body.light footer { border-top: 1px solid var(--border-light); color: var(--text-muted-light); }
+    </style>
+</head>
+<body class="dark">
+
+    <header>
+        <div class="header-logo">
+            <!-- آیکون با ابعاد فیزیکی ثابت ۳۲ پیکسل که هرگز در صورت خرابی CSS بزرگ نمی‌شود -->
+            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--indigo);">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            <h1 id="txt-title" style="font-size: 18px; font-weight: bold;">تست‌کننده هوشمند دی‌ان‌اس</h1>
+        </div>
+        <div class="header-buttons">
+            <button id="btn-lang" class="btn-toggle" onclick="toggleLang()">English</button>
+            <button id="btn-theme" class="btn-toggle" onclick="toggleTheme()">
+                <!-- آیکون تغییر تم مستقل -->
+                <svg id="svg-theme" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+                </svg>
+            </button>
         </div>
     </header>
 
-    <div class="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="container">
         
-        <div class="md:col-span-1 space-y-4">
-            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700/50">
-                <label class="block text-sm font-bold mb-2" x-text="t[lang].dnsListLabel"></label>
-                <textarea x-model="dnsList" class="w-full h-40 p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono text-xs"></textarea>
+        <!-- ستون سمت راست: تنظیمات -->
+        <div class="card">
+            <label id="lbl-dnsList" for="dnsListInput">لیست سرورهای DNS (هر کدام در یک خط):</label>
+            <textarea id="dnsListInput" rows="8"></textarea>
 
-                <div class="mt-4">
-                    <label class="block text-xs font-semibold mb-2" x-text="t[lang].fallbackLabel"></label>
-                    <div class="grid grid-cols-3 gap-2">
-                        <template x-for="option in ['UDP', 'TCP', 'Both']">
-                            <button @click="fallbackProtocol = option" :class="fallbackProtocol === option ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/40'" class="py-1.5 text-xs font-bold rounded-lg border transition-all" x-text="option === 'Both' ? (lang === 'fa' ? 'هر دو' : 'Both') : option"></button>
-                        </template>
-                    </div>
+            <div style="margin-top: 16px;">
+                <label id="lbl-fallback">پروتکل دی‌ان‌اس‌های معمولی (بدون پیشوند):</label>
+                <div class="protocol-grid">
+                    <button id="btn-proto-UDP" class="btn-proto" onclick="setFallback('UDP')">UDP</button>
+                    <button id="btn-proto-TCP" class="btn-proto" onclick="setFallback('TCP')">TCP</button>
+                    <button id="btn-proto-Both" class="btn-proto active" onclick="setFallback('Both')">هر دو</button>
                 </div>
+            </div>
 
-                <button @click="showAdvanced = !showAdvanced" class="w-full mt-4 text-xs font-semibold text-indigo-500 hover:text-indigo-400 flex items-center justify-center gap-1">
-                    <span x-text="t[lang].settings"></span>
-                    <span x-text="showAdvanced ? '▲' : '▼'"></span>
-                </button>
+            <button class="advanced-toggle" onclick="toggleAdvanced()">
+                <span id="lbl-settings">تنظیمات پیشرفته ترافیک</span>
+                <span id="advanced-arrow">▼</span>
+            </button>
 
-                <div x-show="showAdvanced" x-transition class="mt-4 space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700/50">
-                    <div>
-                        <label class="block text-xs font-bold mb-1 text-indigo-500" x-text="t[lang].bootstrapLabel"></label>
-                        <input type="text" x-model="bootstrapDNS" class="w-full p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold mb-1 text-indigo-500" x-text="t[lang].editDomainsLabel"></label>
-                        <textarea x-model="targetDomainsRaw" class="w-full h-24 p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold mb-1" x-text="t[lang].concurrency"></label>
-                        <input type="number" x-model.number="concurrency" class="w-full p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold mb-1" x-text="t[lang].timeout"></label>
-                        <input type="number" x-model.number="timeoutMS" class="w-full p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold mb-1" x-text="t[lang].pingCount"></label>
-                        <input type="number" x-model.number="pingCount" class="w-full p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold mb-1" x-text="t[lang].downloadSize"></label>
-                        <input type="number" x-model.number="downloadMB" class="w-full p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono">
-                    </div>
+            <div id="advancedPanel" class="advanced-panel">
+                <div>
+                    <label id="lbl-bootstrap">دی‌ان‌اس‌های راه انداز (با ویرگول جدا کنید):</label>
+                    <input type="text" id="bootstrapDNSInput">
                 </div>
+                <div>
+                    <label id="lbl-editDomains">لیست دامنه‌های تست (قابل ویرایش):</label>
+                    <textarea id="targetDomainsInput" rows="4"></textarea>
+                </div>
+                <div>
+                    <label id="lbl-concurrency">تعداد تست همزمان (Thread):</label>
+                    <input type="number" id="concurrencyInput">
+                </div>
+                <div>
+                    <label id="lbl-timeout">مهلت اتصال (میلی‌ثانیه):</label>
+                    <input type="number" id="timeoutInput">
+                </div>
+                <div>
+                    <label id="lbl-pingCount">تعداد تکرار بررسی پینگ:</label>
+                    <input type="number" id="pingCountInput">
+                </div>
+                <div>
+                    <label id="lbl-downloadSize">حجم دانلود فایل تست (مگابایت):</label>
+                    <input type="number" id="downloadSizeInput">
+                </div>
+            </div>
 
-                <template x-if="!isTesting">
-                    <button @click="startTesting()" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition flex items-center justify-center gap-2">
-                        <span x-text="t[lang].runTests"></span>
-                    </button>
-                </template>
-                <template x-if="isTesting">
-                    <button @click="abortTesting()" class="w-full mt-6 bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-600/20 hover:shadow-rose-600/30 transition flex items-center justify-center gap-2">
-                        <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
-                        <span x-text="t[lang].abortTests"></span>
-                    </button>
-                </template>
+            <!-- دکمه‌های شروع و لغو هوشمند -->
+            <button id="btn-run" class="btn-action btn-run" onclick="startTesting()">شروع عیب‌یابی و آزمایش</button>
+            <button id="btn-abort" class="btn-action btn-abort" style="display: none;" onclick="abortTesting()">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" class="spin-clockwise" style="animation: spin 1.5s linear infinite;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                </svg>
+                <span id="lbl-abort">لغو و توقف عملیات</span>
+            </button>
+        </div>
+
+        <!-- ستون سمت چپ: نتایج بررسی شبکه به همراه نوار پیشرفت زنده -->
+        <div>
+            <!-- نوار پیشرفت ملموس زنده -->
+            <div id="progressContainer" class="progress-container" style="display: none;">
+                <div class="progress-header">
+                    <span id="progressText">در حال عیب‌یابی...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="progressBarFill" class="progress-bar-fill"></div>
+                </div>
+            </div>
+
+            <!-- پنل اعمال هوشمند دی‌ان‌اس‌ها روی ویندوز -->
+            <div id="magicApplyPanel" class="magic-apply-panel">
+                <span id="lbl-applyBestDesc" class="magic-apply-desc">آیا مایلید دو دی‌ان‌اس برتر شناسایی‌شده روی کارت شبکه فعال ویندوز تنظیم شوند؟</span>
+                <button id="btn-applyBest" class="btn-magic" onclick="applyBestTwoDNS()">اعمال خودکار</button>
+            </div>
+
+            <!-- کادر نتایج -->
+            <div id="resultsContainer">
+                <div id="emptyState" class="empty-state">
+                    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 12px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.656 48.656 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7C4.547 9.547 4.5 10.768 4.5 12s.047 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.092-1.209.138-2.43.138-3.662z"/>
+                    </svg>
+                    <p id="txt-noResults" style="font-size: 13px;">هیچ آزمایش فنی انجام نشده است. ابتدا آدرس‌های دی‌ان‌اس را وارد کنید.</p>
+                </div>
             </div>
         </div>
 
-        <div class="md:col-span-2 space-y-4">
-            
-            <!-- نوار پیشرفت درصدی و وضعیت لود زنده در بالای کارت‌ها -->
-            <template x-if="isTesting">
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-md">
-                    <div class="flex justify-between items-center mb-2 text-xs">
-                        <span class="font-bold text-indigo-500" x-text="progressText"></span>
-                        <span class="font-bold text-slate-500" x-text="progressPercent + '%'"></span>
-                    </div>
-                    <div class="w-full bg-slate-100 dark:bg-slate-900 h-2 rounded-full overflow-hidden">
-                        <div class="bg-indigo-600 h-full transition-all duration-300 rounded-full" :style="'width: ' + progressPercent + '%'"></div>
-                    </div>
-                </div>
-            </template>
-
-            <!-- دکمه اعمال جادویی بهترین دی‌ان‌اس‌ها به عنوان سیستم دی‌ان‌اس اصلی ویندوز -->
-            <template x-if="results.length >= 1">
-                <div class="flex justify-between items-center p-4 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 shadow-md">
-                    <span class="text-xs font-bold text-indigo-400" x-text="t[lang].applyBestDnsDesc"></span>
-                    <button @click="applyBestTwoDNS()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-4 rounded-xl shadow transition">
-                        <span x-text="t[lang].applyBestDns"></span>
-                    </button>
-                </div>
-            </template>
-
-            <template x-if="results.length === 0 && !isTesting">
-                <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl text-center border border-slate-200 dark:border-slate-700/50">
-                    <svg class="w-16 h-16 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.656 48.656 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7C4.547 9.547 4.5 10.768 4.5 12s.047 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.092-1.209.138-2.43.138-3.662z"/></svg>
-                    <p class="text-slate-400 text-sm" x-text="t[lang].noResults"></p>
-                </div>
-            </template>
-
-            <!-- رندر زنده و آنی کارت‌های نتایج دی‌ان‌اس‌ها به محض آماده شدن هر دی‌ان‌اس -->
-            <template x-for="res in results">
-                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700/50 hover:border-indigo-500 transition-all">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400" x-text="res.protocol"></span>
-                            <span class="font-bold font-mono text-sm md:text-base" x-text="res.ip"></span>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <!-- دکمه ست کردن تکی همین دی‌ان‌اس روی کارت شبکه سیستم -->
-                            <button @click="applySingleDNS(res.ip)" class="text-[11px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 px-3 py-1.5 border border-indigo-500/20 rounded-xl transition font-bold" x-text="t[lang].setAsSystem"></button>
-                            
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-xs text-slate-400" x-text="t[lang].score"></span>
-                                <span class="text-xl font-black text-indigo-500" x-text="res.score"></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 text-xs md:text-sm border-t border-slate-100 dark:border-slate-700/40 pt-3 mb-4">
-                        <div>
-                            <span class="text-slate-400" x-text="t[lang].latency + ': '"></span>
-                            <strong class="font-mono text-emerald-500" x-text="res.avg_latency_ms === 9999 ? t[lang].Failed : res.avg_latency_ms.toFixed(1) + ' ms'"></strong>
-                        </div>
-                        <div>
-                            <span class="text-slate-400" x-text="t[lang].speed + ': '"></span>
-                            <strong class="font-mono text-amber-500" x-text="res.download_speed_mbps.toFixed(2) + ' Mbps'"></strong>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/30">
-                        <template x-for="site in res.site_results">
-                            <div class="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 flex flex-col justify-between text-[11px]">
-                                <span class="font-medium text-slate-500 dark:text-slate-400 truncate" x-text="site.domain"></span>
-                                <span class="font-bold mt-1" 
-                                      :class="site.status === 'Safe' ? 'text-emerald-500' : 
-                                              (site.status === 'Sanctioned' ? 'text-amber-500' : 
-                                              (site.status === 'Poisoned' ? 'text-rose-600 font-extrabold' : 'text-slate-400'))" 
-                                      x-text="t[lang][site.status]"></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </template>
-        </div>
     </div>
 
-    <footer class="text-xs text-slate-400 text-center py-6 border-t border-slate-200 dark:border-slate-800 mt-8">
-        Smart DNS Tester - Version <span x-text="version"></span>
+    <footer>
+        Smart DNS Tester - Version <span id="txt-version">1.0.0</span>
     </footer>
 
+    <!-- منطق جاوااسکریپت فوق‌العاده پایدار و مستقل از CDN بومی -->
     <script>
-        function dnsTester() {
-            return {
-                lang: 'fa',
-                dark: true,
-                fallbackProtocol: 'Both',
-                dnsList: '1.1.1.2\ntcp://1.1.1.3\nudp://1.1.1.1\nhttps://dns.google/dns-query\nhttps://cloudflare-dns.com/dns-query',
-                concurrency: 10,
-                timeoutMS: 2000,
-                pingCount: 5,
-                downloadMB: 2,
-                showAdvanced: false,
-                isTesting: false,
-                version: '1.0.0',
-                results: [],
-                bootstrapDNS: '1.1.1.1, 8.8.8.8',
-                targetDomainsRaw: 'chatgpt.com\ngemini.google.com\nclaude.ai\ngrok.com\nx.com\ntwitter.com\nstore.steampowered.com\nsteamcommunity.com\nepicgames.com\ngithub.com\nyoutube.com',
-                
-                // متغیرهای نوار پیشرفت جدید
-                progressPercent: 0,
-                progressText: '',
+        // پایگاه داده ترجمه بومی
+        const translations = {
+            fa: {
+                title: "تست‌کننده هوشمند دی‌ان‌اس",
+                dnsListLabel: "لیست سرورهای DNS (هر کدام در یک خط):",
+                fallbackLabel: "پروتکل دی‌ان‌اس‌های معمولی (بدون پیشوند):",
+                runTests: "شروع عیب‌یابی و آزمایش",
+                abortTests: "لغو و توقف عملیات",
+                score: "امتیاز هوشمند",
+                latency: "میانگین تاخیر",
+                speed: "سرعت دانلود کلادفلر",
+                settings: "تنظیمات پیشرفته ترافیک",
+                bootstrapLabel: "دی‌ان‌اس‌های راه انداز (با ویرگول جدا کنید):",
+                editDomainsLabel: "لیست دامنه‌های تست (قابل ویرایش):",
+                concurrency: "تعداد تست همزمان (Thread):",
+                timeout: "مهلت اتصال (میلی‌ثانیه):",
+                pingCount: "تعداد تکرار بررسی پینگ:",
+                downloadSize: "حجم دانلود فایل تست (مگابایت):",
+                Safe: "سالم و ایمن",
+                Sanctioned: "تحریم شده (۴۰۳)",
+                Poisoned: "مسدود/فیلتر شده",
+                Failed: "خطای اتصال",
+                noResults: "هیچ آزمایش فنی انجام نشده است. ابتدا آدرس‌های دی‌ان‌اس را وارد کنید.",
+                setAsSystem: "تنظیم روی سیستم",
+                applyBestDns: "اعمال خودکار",
+                applyBestDnsDesc: "آیا مایلید دو دی‌ان‌اس برتر شناسایی‌شده روی کارت شبکه فعال ویندوز تنظیم شوند؟",
+                successAlert: "تنظیمات با موفقیت روی ویندوز ست شد.",
+                errorAlert: "خطا در تنظیم دی‌ان‌اس روی ویندوز (برنامه را به صورت Run as Administrator اجرا کنید)."
+            },
+            en: {
+                title: "Smart DNS Tester",
+                dnsListLabel: "DNS Server List (One per line):",
+                fallbackLabel: "Protocol for plain IPs (without prefix):",
+                runTests: "Run Network Diagnostics",
+                abortTests: "Abort Operations",
+                score: "Smart Score",
+                latency: "Avg Latency",
+                speed: "Cloudflare Download Speed",
+                settings: "Advanced Test Parameters",
+                bootstrapLabel: "Bootstrap DNS (comma-separated):",
+                editDomainsLabel: "Target Test Domains (Editable):",
+                concurrency: "Concurrency Limit:",
+                timeout: "Timeout limit (ms):",
+                pingCount: "Ping Repeat count:",
+                downloadSize: "Download test size (MB):",
+                Safe: "Open & Safe",
+                Sanctioned: "Sanctioned (403)",
+                Poisoned: "Blocked/Poisoned",
+                Failed: "Connection Failed",
+                noResults: "No tests run yet. Insert DNS addresses and click Run.",
+                setAsSystem: "Apply to System",
+                applyBestDns: "Apply Best 2 DNS",
+                applyBestDnsDesc: "Do you want to automatically apply the top 2 DNS servers on all active interfaces?",
+                successAlert: "DNS servers successfully set.",
+                errorAlert: "Failed to apply DNS (Please Run as Administrator)."
+            }
+        };
 
-                t: {
-                    fa: {
-                        title: "تست‌کننده هوشمند دی‌ان‌اس",
-                        dnsListLabel: "لیست سرورهای DNS (هر کدام در یک خط):",
-                        fallbackLabel: "پروتکل دی‌ان‌اس‌های معمولی (بدون پیشوند):",
-                        runTests: "شروع عیب‌یابی و آزمایش",
-                        abortTests: "لغو و توقف عملیات",
-                        testing: "در حال بررسی شبکه...",
-                        score: "امتیاز هوشمند",
-                        latency: "میانگین تاخیر",
-                        speed: "سرعت دانلود کلادفلر",
-                        settings: "تنظیمات پیشرفته ترافیک",
-                        bootstrapLabel: "دی‌ان‌اس‌های راه انداز (با ویرگول جدا کنید):",
-                        editDomainsLabel: "لیست دامنه‌های تست (قابل ویرایش):",
-                        concurrency: "تعداد تست همزمان (Thread):",
-                        timeout: "مهلت اتصال (میلی‌ثانیه):",
-                        pingCount: "تعداد تکرار بررسی پینگ:",
-                        downloadSize: "حجم دانلود فایل تست (مگابایت):",
-                        Safe: "سالم و ایمن",
-                        Sanctioned: "تحریم شده (۴۰۳)",
-                        Poisoned: "مسدود/فیلتر شده",
-                        Failed: "خطای اتصال",
-                        noResults: "هیچ تستی انجام نشده است. ابتدا آدرس‌های دی‌ان‌اس را وارد کنید و دکمه شروع را بزنید.",
-                        setAsSystem: "ست کردن رو سیستم",
-                        applyBestDns: "اعمال خودکار دو دی‌ان‌اس برتر",
-                        applyBestDnsDesc: "آیا مایلید دو تا از بهترین دی‌ان‌اس‌های تست شده بالا روی تمام کارت‌های شبکه شما اعمال شوند؟",
-                        successAlert: "تغییرات با موفقیت اعمال شد.",
-                        errorAlert: "خطا در اعمال تغییرات (لطفاً برنامه را به صورت Run as Administrator اجرا کنید)."
-                    },
-                    en: {
-                        title: "Smart DNS Tester",
-                        dnsListLabel: "DNS Server List (One per line):",
-                        fallbackLabel: "Protocol for plain IPs (without prefix):",
-                        runTests: "Run Network Diagnostics",
-                        abortTests: "Abort Operations",
-                        testing: "Diagnosing...",
-                        score: "Smart Score",
-                        latency: "Avg Latency",
-                        speed: "Cloudflare Download Speed",
-                        settings: "Advanced Test Parameters",
-                        bootstrapLabel: "Bootstrap DNS (comma-separated):",
-                        editDomainsLabel: "Target Test Domains (Editable):",
-                        concurrency: "Concurrency Limit:",
-                        timeout: "Timeout limit (ms):",
-                        pingCount: "Ping Repeat count:",
-                        downloadSize: "Download test size (MB):",
-                        Safe: "Open & Safe",
-                        Sanctioned: "Sanctioned (403)",
-                        Poisoned: "Blocked/Poisoned",
-                        Failed: "Connection Failed",
-                        noResults: "No tests run yet. Insert DNS addresses and click Run.",
-                        setAsSystem: "Apply to System",
-                        applyBestDns: "Apply Best 2 DNS",
-                        applyBestDnsDesc: "Do you want to automatically apply the top 2 DNS servers on all active interfaces?",
-                        successAlert: "DNS servers successfully set.",
-                        errorAlert: "Failed to apply DNS (Please Run as Administrator)."
-                    }
-                },
+        // متغیرهای وضعیت سراسری فرانت‌اند
+        let lang = 'fa';
+        let isDarkMode = true;
+        let fallbackProtocol = 'Both';
+        let showAdvanced = false;
+        let isTesting = false;
+        let results = [];
 
-                init() {
-                    if (window.go && window.go.main && window.go.main.App) {
-                        window.go.main.App.GetVersion().then(v => this.version = v);
-                    }
+        // مقادیر پیش‌فرض فیلدهای ورودی
+        const defaultDnsList = "1.1.1.2\ntcp://1.1.1.3\nudp://1.1.1.1\nhttps://dns.google/dns-query\nhttps://cloudflare-dns.com/dns-query";
+        const defaultBootstrapDNS = "1.1.1.1, 8.8.8.8";
+        const defaultTargetDomains = "chatgpt.com\ngemini.google.com\nclaude.ai\ngrok.com\nx.com\ntwitter.com\nstore.steampowered.com\nsteamcommunity.com\nepicgames.com\ngithub.com\nyoutube.com";
 
-                    // شنود رویدادها از بک‌اند Go برای دریافت پاسخ زنده تکی کارت‌ها و نوار پیشرفت (مشابه Tauri)
-                    if (window.runtime) {
-                        // ۱. دریافت پاسخ‌های تکی زنده و چیدن آن‌ها در جدول بر اساس امتیاز نزولی
-                        window.runtime.EventsOn("dns-single-result", (res) => {
-                            this.results.push(res);
-                            this.results.sort((a, b) => b.score - a.score);
-                        });
+        // راه‌اندازی فرانت‌اند پس از لود شدن کامل صفحه
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('dnsListInput').value = defaultDnsList;
+            document.getElementById('bootstrapDNSInput').value = defaultBootstrapDNS;
+            document.getElementById('targetDomainsInput').value = defaultTargetDomains;
+            document.getElementById('concurrencyInput').value = 10;
+            document.getElementById('timeoutInput').value = 2000;
+            document.getElementById('pingCountInput').value = 5;
+            document.getElementById('downloadSizeInput').value = 2;
 
-                        // ۲. دریافت اطلاعات لحظه‌ای نوار پیشرفت برای کاربر
-                        window.runtime.EventsOn("dns-test-progress", (prog) => {
-                            this.progressPercent = prog.percent;
-                            this.progressText = prog.status_text;
-                        });
+            updateLanguageUI();
 
-                        // ۳. اتمام نهایی عملیات
-                        window.runtime.EventsOn("dns-test-complete", () => {
-                            this.isTesting = false;
-                        });
-                    }
-                },
+            // ارتباط با گیت‌های لایو Wails (Asynchronous)
+            if (window.runtime) {
+                // دریافت کارت‌های تکی بررسی شده به محض اتمام در ثانیه
+                window.runtime.EventsOn("dns-single-result", (res) => {
+                    results.push(res);
+                    // مرتب‌سازی هوشمند نزولی به محض تولید کارت جدید
+                    results.sort((a, b) => b.score - a.score);
+                    renderResultsHTML();
+                });
 
-                toggleLang() {
-                    this.lang = this.lang === 'fa' ? 'en' : 'fa';
-                },
+                // دریافت داده‌های پیشرفت لایو درصدی
+                window.runtime.EventsOn("dns-test-progress", (prog) => {
+                    document.getElementById('progressContainer').style.display = 'block';
+                    document.getElementById('progressText').innerText = prog.status_text;
+                    document.getElementById('progressPercent').innerText = prog.percent + '%';
+                    document.getElementById('progressBarFill').style.width = prog.percent + '%';
+                });
 
-                toggleTheme() {
-                    this.dark = !this.dark;
-                    if (this.dark) {
-                        document.documentElement.classList.add('dark');
-                    } else {
-                        document.documentElement.classList.remove('dark');
-                    }
-                },
+                // اعلان اتمام تست‌ها
+                window.runtime.EventsOn("dns-test-complete", () => {
+                    setTestingState(false);
+                });
+            }
 
-                async startTesting() {
-                    if (this.isTesting) return;
-                    this.isTesting = true;
-                    this.results = [];
-                    this.progressPercent = 0;
-                    this.progressText = this.t[this.lang].testing;
+            // لود نسخه برنامه
+            if (window.go && window.go.main && window.go.main.App) {
+                window.go.main.App.GetVersion().then(v => {
+                    document.getElementById('txt-version').innerText = v;
+                });
+            }
+        });
 
-                    const domainsArray = this.targetDomainsRaw.split('\n')
-                        .map(d => d.trim())
-                        .filter(d => d !== "");
+        function toggleLang() {
+            lang = lang === 'fa' ? 'en' : 'fa';
+            updateLanguageUI();
+        }
 
-                    const requestPayload = {
-                        dns_list: this.dnsList,
-                        fallback_protocol: this.fallbackProtocol,
-                        concurrency: this.concurrency,
-                        timeout_ms: this.timeoutMS,
-                        ping_count: this.pingCount,
-                        download_mb: this.downloadMB,
-                        target_domains: domainsArray,
-                        bootstrap_dns: this.bootstrapDNS
-                    };
+        function updateLanguageUI() {
+            document.body.setAttribute('dir', lang === 'fa' ? 'rtl' : 'ltr');
+            document.getElementById('btn-lang').innerText = lang === 'fa' ? 'English' : 'فارسی';
+            
+            const t = translations[lang];
+            document.getElementById('txt-title').innerText = t.title;
+            document.getElementById('lbl-dnsList').innerText = t.dnsListLabel;
+            document.getElementById('lbl-fallback').innerText = t.fallbackLabel;
+            document.getElementById('lbl-settings').innerText = t.settings;
+            document.getElementById('lbl-bootstrap').innerText = t.bootstrapLabel;
+            document.getElementById('lbl-editDomains').innerText = t.editDomainsLabel;
+            document.getElementById('lbl-concurrency').innerText = t.concurrency;
+            document.getElementById('lbl-timeout').innerText = t.timeout;
+            document.getElementById('lbl-pingCount').innerText = t.pingCount;
+            document.getElementById('lbl-downloadSize').innerText = t.downloadSize;
+            document.getElementById('btn-run').innerText = t.runTests;
+            document.getElementById('lbl-abort').innerText = t.abortTests;
+            document.getElementById('lbl-applyBestDesc').innerText = t.applyBestDnsDesc;
+            document.getElementById('btn-applyBest').innerText = t.applyBestDns;
 
-                    try {
-                        if (window.go && window.go.main && window.go.main.App) {
-                            // فرستادن اطلاعات اولیه؛ کارهای تست دیگر قفل‌کننده نیستند و رویدادهای زنده را شنود می‌کنیم
-                            await window.go.main.App.RunDNSTests(requestPayload);
-                        } else {
-                            // نمونه دیتای تستی برای پیش‌نمایش در مرورگرهای وب خام خارج از ویندوز
-                            setTimeout(() => {
-                                this.results = [
-                                    {
-                                        protocol: 'DoH', ip: 'https://cloudflare-dns.com', avg_latency_ms: 22.4, jitter_ms: 1.2, download_speed_mbps: 92.5, score: 98,
-                                        site_results: [
-                                            { domain: 'chatgpt.com', status: 'Sanctioned' },
-                                            { domain: 'x.com', status: 'Safe' },
-                                            { domain: 'youtube.com', status: 'Poisoned' },
-                                            { domain: 'epicgames.com', status: 'Safe' }
-                                        ]
-                                    }
-                                ];
-                                this.isTesting = false;
-                            }, 2000);
-                        }
-                    } catch (e) {
-                        console.error("Test execution failed:", e);
-                        this.isTesting = false;
-                    }
-                },
+            if (results.length === 0) {
+                document.getElementById('txt-noResults').innerText = t.noResults;
+            } else {
+                renderResultsHTML();
+            }
+        }
 
-                async abortTesting() {
-                    if (!this.isTesting) return;
-                    try {
-                        if (window.go && window.go.main && window.go.main.App) {
-                            await window.go.main.App.AbortAllTasks();
-                        }
-                    } catch (e) {
-                        console.error("Failed to abort tasks:", e);
-                    } finally {
-                        this.isTesting = false;
-                    }
-                },
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            const svgTheme = document.getElementById('svg-theme');
+            if (isDarkMode) {
+                document.body.className = 'dark';
+                svgTheme.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>';
+            } else {
+                document.body.className = 'light';
+                svgTheme.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
+            }
+        }
 
-                // متدهای اعمال دی‌ان‌اس روی کارت شبکه سیستم کاربر با استفاده از هسته بک‌اند Go
-                async applySingleDNS(ip) {
-                    if (!window.go || !window.go.main || !window.go.main.App) return;
-                    const res = await window.go.main.App.SetSystemDNS(ip, "");
-                    if (res === "success") {
-                        alert(this.t[this.lang].successAlert);
-                    } else {
-                        alert(this.t[this.lang].errorAlert);
-                    }
-                },
+        function setFallback(proto) {
+            fallbackProtocol = proto;
+            document.querySelectorAll('.btn-proto').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`btn-proto-${proto}`).classList.add('active');
+        }
 
-                async applyBestTwoDNS() {
-                    if (this.results.length === 0 || !window.go || !window.go.main || !window.go.main.App) return;
-                    const primary = this.results[0].ip;
-                    let secondary = "";
-                    if (this.results.length >= 2) {
-                        secondary = this.results[1].ip;
-                    }
-                    const res = await window.go.main.App.SetSystemDNS(primary, secondary);
-                    if (res === "success") {
-                        alert(this.t[this.lang].successAlert);
-                    } else {
-                        alert(this.t[this.lang].errorAlert);
-                    }
+        function toggleAdvanced() {
+            showAdvanced = !showAdvanced;
+            const panel = document.getElementById('advancedPanel');
+            const arrow = document.getElementById('advanced-arrow');
+            if (showAdvanced) {
+                panel.classList.add('show');
+                arrow.innerText = '▲';
+            } else {
+                panel.classList.remove('show');
+                arrow.innerText = '▼';
+            }
+        }
+
+        function setTestingState(testing) {
+            isTesting = testing;
+            if (testing) {
+                document.getElementById('btn-run').style.display = 'none';
+                document.getElementById('btn-abort').style.display = 'flex';
+                document.getElementById('progressContainer').style.display = 'block';
+                document.getElementById('magicApplyPanel').style.display = 'none';
+            } else {
+                document.getElementById('btn-run').style.display = 'flex';
+                document.getElementById('btn-abort').style.display = 'none';
+                document.getElementById('progressContainer').style.display = 'none';
+                if (results.length > 0) {
+                    document.getElementById('magicApplyPanel').style.display = 'flex';
                 }
             }
+        }
+
+        async function startTesting() {
+            if (isTesting) return;
+            setTestingState(true);
+            results = [];
+            renderResultsHTML();
+
+            const dnsListVal = document.getElementById('dnsListInput').value;
+            const bootstrapVal = document.getElementById('bootstrapDNSInput').value;
+            const domainsVal = document.getElementById('targetDomainsInput').value;
+            const concurrencyVal = parseInt(document.getElementById('concurrencyInput').value) || 10;
+            const timeoutVal = parseInt(document.getElementById('timeoutInput').value) || 2000;
+            const pingVal = parseInt(document.getElementById('pingCountInput').value) || 5;
+            const downloadSizeVal = parseInt(document.getElementById('downloadSizeInput').value) || 2;
+
+            const domainsArray = domainsVal.split('\n')
+                .map(d => d.trim())
+                .filter(d => d !== "");
+
+            const requestPayload = {
+                dns_list: dnsListVal,
+                fallback_protocol: fallbackProtocol,
+                concurrency: concurrencyVal,
+                timeout_ms: timeoutVal,
+                ping_count: pingVal,
+                download_mb: downloadSizeVal,
+                target_domains: domainsArray,
+                bootstrap_dns: bootstrapVal
+            };
+
+            try {
+                if (window.go && window.go.main && window.go.main.App) {
+                    await window.go.main.App.RunDNSTests(requestPayload);
+                } else {
+                    // اجرای دمو فاقد بک‌اند وب جهت تست تمپلیت
+                    simulateWebDemo();
+                }
+            } catch (e) {
+                console.error(e);
+                setTestingState(false);
+            }
+        }
+
+        async function abortTesting() {
+            if (!isTesting) return;
+            try {
+                if (window.go && window.go.main && window.go.main.App) {
+                    await window.go.main.App.AbortAllTasks();
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setTestingState(false);
+            }
+        }
+
+        async function applySingleDNS(ip) {
+            if (!window.go || !window.go.main || !window.go.main.App) return;
+            const res = await window.go.main.App.SetSystemDNS(ip, "");
+            if (res === "success") {
+                alert(translations[lang].successAlert);
+            } else {
+                alert(translations[lang].errorAlert);
+            }
+        }
+
+        async function applyBestTwoDNS() {
+            if (results.length === 0 || !window.go || !window.go.main || !window.go.main.App) return;
+            const primary = results[0].ip;
+            let secondary = "";
+            if (results.length >= 2) {
+                secondary = results[1].ip;
+            }
+            const res = await window.go.main.App.SetSystemDNS(primary, secondary);
+            if (res === "success") {
+                alert(translations[lang].successAlert);
+            } else {
+                alert(translations[lang].errorAlert);
+            }
+        }
+
+        // رندر کامپوننت‌های کارت بر بستر Vanilla JS برای همگام‌سازی کامل آفلاین
+        function renderResultsHTML() {
+            const container = document.getElementById('resultsContainer');
+            const t = translations[lang];
+            
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div id="emptyState" class="empty-state">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 12px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.656 48.656 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7C4.547 9.547 4.5 10.768 4.5 12s.047 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.092-1.209.138-2.43.138-3.662z"/>
+                        </svg>
+                        <p id="txt-noResults" style="font-size: 13px;">${t.noResults}</p>
+                    </div>`;
+                return;
+            }
+
+            let html = "";
+            results.forEach(res => {
+                let latencyText = res.avg_latency_ms === 9999 ? t.Failed : res.avg_latency_ms.toFixed(1) + " ms";
+                
+                let sitesHTML = "";
+                res.site_results.forEach(site => {
+                    let statusClass = "status-failed";
+                    if (site.status === "Safe") statusClass = "status-safe";
+                    else if (site.status === "Sanctioned") statusClass = "status-sanctioned";
+                    else if (site.status === "Poisoned") statusClass = "status-poisoned";
+
+                    sitesHTML += `
+                        <div class="site-badge">
+                            <span class="site-domain" title="${site.domain}">${site.domain}</span>
+                            <span class="${statusClass}">${t[site.status]}</span>
+                        </div>`;
+                });
+
+                html += `
+                    <div class="dns-card animate-fade-in">
+                        <div class="dns-card-header">
+                            <div>
+                                <span class="dns-badge">${res.protocol}</span>
+                                <span class="dns-ip">${res.ip}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <button class="btn-set-system" onclick="applySingleDNS('${res.ip}')">${t.setAsSystem}</button>
+                                <div>
+                                    <span style="font-size: 11px; color: var(--text-muted-light);">${t.score}</span>
+                                    <span class="dns-score">${res.score}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dns-card-meta">
+                            <div>${t.latency}: <strong style="color: var(--emerald); font-family: monospace;">${latencyText}</strong></div>
+                            <div>${t.speed}: <strong style="color: var(--amber); font-family: monospace;">${res.download_speed_mbps.toFixed(2)} Mbps</strong></div>
+                        </div>
+                        <div class="sites-grid">
+                            ${sitesHTML}
+                        </div>
+                    </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // شبیه‌ساز زنده مرورگرهای لوکال بدون بایندی بک‌آند
+        function simulateWebDemo() {
+            let comp = 0;
+            const interval = setInterval(() => {
+                comp += 25;
+                document.getElementById('progressContainer').style.display = 'block';
+                document.getElementById('progressText').innerText = "در حال شبیه‌سازی نتایج دمو...";
+                document.getElementById('progressPercent').innerText = comp + '%';
+                document.getElementById('progressBarFill').style.width = comp + '%';
+                
+                results.push({
+                    protocol: 'UDP', ip: '1.1.1.2', avg_latency_ms: 12.5 + comp, jitter_ms: 1.1, download_speed_mbps: 84.2 - comp/10, score: 95 - comp/5,
+                    site_results: [
+                        { domain: 'chatgpt.com', status: 'Sanctioned' },
+                        { domain: 'x.com', status: 'Safe' },
+                        { domain: 'youtube.com', status: 'Poisoned' },
+                        { domain: 'epicgames.com', status: 'Safe' }
+                    ]
+                });
+                results.sort((a, b) => b.score - a.score);
+                renderResultsHTML();
+
+                if (comp >= 100) {
+                    clearInterval(interval);
+                    setTestingState(false);
+                }
+            }, 600);
         }
     </script>
 </body>
