@@ -1,9 +1,7 @@
 name: Build and Release Windows App
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch: # فقط اجرای دستی فعال است؛ به هیچ عنوان با Push یا تغییر کد خودکار اجرا نمی‌شود
 
 permissions:
   contents: write
@@ -34,21 +32,16 @@ jobs:
       run: pip install Pillow
 
     - name: Generate Custom App Icon with Code
-      # اجرای اسکریپت پایتون بومی جهت تولید آیکون گرافیکی شبکه (سپر حفاظتی بنفش + صاعقه فیروزه‌ای پرسرعت)
       run: |
         python -c "
         from PIL import Image, ImageDraw
         img = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        # پس‌زمینه مربعی دایره‌ای تیره ملایم
         draw.rounded_rectangle([32, 32, 480, 480], radius=100, fill=(30, 27, 75, 255))
-        # ترسیم سپر خارجی (نماد ایمنی DNS)
         shield_pts = [(256, 80), (410, 150), (410, 320), (256, 440), (102, 320), (102, 150)]
         draw.polygon(shield_pts, fill=(79, 70, 229, 255))
-        # سپر داخلی برای ایجاد افکت عمق دوبعدی
         inner_shield = [(256, 105), (385, 165), (385, 305), (256, 415), (127, 305), (127, 165)]
         draw.polygon(inner_shield, fill=(30, 27, 75, 255))
-        # صاعقه فیروزه‌ای درخشان در مرکز (نماد سرعت خیره‌کننده دی‌ان‌اس)
         lightning = [(256, 130), (330, 240), (275, 240), (295, 380), (182, 270), (237, 270)]
         draw.polygon(lightning, fill=(34, 211, 238, 255))
         img.save('appicon.png')
