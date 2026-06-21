@@ -1,0 +1,54 @@
+name: Build and Release Windows App
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # این بخش دکمه اجرای دستی را در سایت گیت‌هاب فعال می‌کند
+
+permissions:
+  contents: write # اعطای مجوز به گیت‌هاب برای ایجاد نسخه ریلیز و آپلود فایل .exe
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set Version Environment Variable
+      # تولید اتوماتیک نسخه بر اساس شماره اجرای اکشن (مثلا v1.0.12)
+      run: echo "APP_VERSION=v1.0.${{ github.run_number }}" >> $env:GITHUB_ENV
+      shell: powerShell
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Install Wails CLI
+      # نصب فریم ورک بیلد ویندوز
+      run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+    - name: Build Windows Executable
+      # تزریق نسخه ساخته شده به متغیر ورژن در فایل main.go
+      run: |
+        wails build -platform windows/amd64 -ldflags "-X 'main.Version=${{ env.APP_VERSION }}'"
+
+    - name: Rename Output Executable
+      # تغییر نام فایل نهایی برای جذابیت و درج شماره نسخه در نام آن
+      run: |
+        mv build/bin/my-dns-tester.exe build/bin/dns-tester-${{ env.APP_VERSION }}.exe
+      shell: powerShell
+
+    - name: Create GitHub Release and Upload Asset
+      # ساخت خودکار ریلیز و آپلود فایل .exe نهایی
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.APP_VERSION }}
+        name: Release ${{ env.APP_VERSION }}
+        draft: false
+        prerelease: false
+        files: build/bin/dns-tester-${{ env.APP_VERSION }}.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
