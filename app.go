@@ -10,11 +10,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/wailsapp/wails/v2/pkg/runtime" // ایمپورت سیستم رویدادهای Wails برای گزارش زنده
 )
 
 type App struct {
@@ -34,21 +36,43 @@ func (a *App) GetVersion() string {
 	return a.version
 }
 
-// متغیرهای سراسری برای کنترل و لغو تسک‌ها (مشابه ابزار برگُزین)
 var (
 	activeCancel context.CancelFunc
 	activeMutex  sync.Mutex
 )
 
-// متد لغو آنی تمام تست‌های در حال اجرا
 func (a *App) AbortAllTasks() {
 	activeMutex.Lock()
 	defer activeMutex.Unlock()
 	if activeCancel != nil {
 		activeCancel()
 		activeCancel = nil
-		fmt.Println("All active DNS and download tasks aborted successfully.")
+		fmt.Println("All active tasks cancelled by user.")
 	}
+}
+
+// متد الهام گرفته شده از پروژه پایتونی: اعمال دی‌ان‌اس‌های برتر روی تمام کارت‌های شبکه فعال ویندوز
+func (a *App) SetSystemDNS(primaryDNS, secondaryDNS string) string {
+	// استفاده از پاورشل برای یافتن کارت‌های شبکه متصل (Up) و اعمال تنظیمات استاتیک دی‌ان‌اس
+	psCommand := fmt.Sprintf(
+		`Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ("%s", "%s") }`,
+		primaryDNS, secondaryDNS,
+	)
+	if secondaryDNS == "" {
+		psCommand = fmt.Sprintf(
+			`Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ("%s") }`,
+			primaryDNS,
+		)
+	}
+
+	cmd := exec.Command("powershell", "-Command", psCommand)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Sprintf("failed: %s", stderr.String())
+	}
+	return "success"
 }
 
 type TestRequest struct {
@@ -138,7 +162,6 @@ func bootstrapHost(ctx context.Context, hostOrURL string, timeout time.Duration,
 	c := dns.Client{Net: "udp", Timeout: timeout}
 	
 	for _, server := range bootstrapServers {
-		// بررسی لغو تسک قبل از ارسال پکت
 		if ctx.Err() != nil {
 			return hostOrURL
 		}
@@ -152,8 +175,8 @@ func bootstrapHost(ctx context.Context, hostOrURL string, timeout time.Duration,
 	return hostOrURL
 }
 
-func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
-	// لغو تسک‌های قبلی در صورت وجود
+// تابع تست دی‌ان‌اس‌ها به صورت ناهمزمان (Asynchronous) بازنویسی شد تا نتایج را زنده ارسال کند
+func (a *App) RunDNSTests(req TestRequest) string {
 	a.AbortAllTasks()
 
 	activeMutex.Lock()
@@ -182,30 +205,65 @@ func (a *App) RunDNSTests(req TestRequest) []DNSTestResult {
 		targets = append(targets, parsed...)
 	}
 
-	results := make([]DNSTestResult, len(targets))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, req.Concurrency)
-
-	for i, target := range targets {
-		if ctx.Err() != nil {
-			break
-		}
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(idx int, tgt TargetDNS) {
-			defer wg.Done()
-			defer func() { <-sem }()
-
-			if ctx.Err() != nil {
-				results[idx] = DNSTestResult{RawInput: tgt.RawInput, IP: tgt.IP, Protocol: tgt.Protocol, AvgLatencyMS: 9999, Score: 0}
-				return
-			}
-			results[idx] = a.testSingleDNS(ctx, tgt, timeout, req.PingCount, req.DownloadMB, req.TargetDomains, bootstrapServers)
-		}(i, target)
+	total := len(targets)
+	if total == 0 {
+		return "empty"
 	}
-	wg.Wait()
 
-	return results
+	// اجرای تست در یک گوروتین جداگانه برای جلوگیری از قفل شدن فرانت‌اند
+	go func() {
+		var completed int
+		var progressMutex sync.Mutex
+
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, req.Concurrency)
+
+		for i, target := range targets {
+			if ctx.Err() != nil {
+				break
+			}
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(idx int, tgt TargetDNS) {
+				defer wg.Done()
+				defer func() { <-sem }()
+
+				if ctx.Err() != nil {
+					return
+				}
+
+				// ارسال پیام وضعیت در حال تست به فرانت‌اند
+				progressMutex.Lock()
+				statusText := fmt.Sprintf("در حال بررسی: %s (%d/%d)", tgt.RawInput, completed+1, total)
+				percent := int((float64(completed) / float64(total)) * 100)
+				runtime.EventsEmit(a.ctx, "dns-test-progress", map[string]interface{}{
+					"percent":     percent,
+					"status_text": statusText,
+				})
+				progressMutex.Unlock()
+
+				singleRes := a.testSingleDNS(ctx, tgt, timeout, req.PingCount, req.DownloadMB, req.TargetDomains, bootstrapServers)
+
+				// ارسال تکی پاسخ هر دی‌ان‌اس به فرانت‌اند (کاملاً زنده و Real-time)
+				runtime.EventsEmit(a.ctx, "dns-single-result", singleRes)
+
+				progressMutex.Lock()
+				completed++
+				// آپدیت درصد نوار پیشرفت پس از اتمام تست
+				percent = int((float64(completed) / float64(total)) * 100)
+				runtime.EventsEmit(a.ctx, "dns-test-progress", map[string]interface{}{
+					"percent":     percent,
+					"status_text": fmt.Sprintf("تکمیل شده: %d/%d", completed, total),
+				})
+				progressMutex.Unlock()
+
+			}(i, target)
+		}
+		wg.Wait()
+		runtime.EventsEmit(a.ctx, "dns-test-complete", "done")
+	}()
+
+	return "started"
 }
 
 func parseDNSAddress(input string, fallback string) []TargetDNS {
@@ -321,14 +379,13 @@ func (a *App) testSingleDNS(ctx context.Context, target TargetDNS, timeout time.
 			if isIranianPoisonedIP(ips[0]) {
 				siteRes.Status = "Poisoned"
 			} else {
-				// تفکیک هوشمند تحریم از فیلترینگ با تکیه بر متد بررسی کدهای HTTP برگشتی (مشابه پروژه برگُزین)
 				statusCode, httpErr := checkURLWithResolvedIP(ctx, domain, ips[0], timeout)
 				if httpErr != nil {
 					siteRes.Status = "Failed"
 				} else if statusCode == 403 {
-					siteRes.Status = "Sanctioned" // تحریم شده
+					siteRes.Status = "Sanctioned"
 				} else {
-					siteRes.Status = "Safe" // کاملا باز و سالم
+					siteRes.Status = "Safe"
 					successBypassCount++
 					if firstResolvedIP == "" {
 						firstResolvedIP = ips[0]
@@ -339,8 +396,9 @@ func (a *App) testSingleDNS(ctx context.Context, target TargetDNS, timeout time.
 		res.SiteResults = append(res.SiteResults, siteRes)
 	}
 
+	// بهینه سازی تست سرعت: استفاده از CDN پایدار کلادفلر جهت سنجش بی‌نقص سرعت بدون اختلال TLS
 	if firstResolvedIP != "" && downloadMB > 0 && ctx.Err() == nil {
-		speed, err := testSteamDownloadSpeed(ctx, firstResolvedIP, downloadMB, 10*time.Second)
+		speed, err := testGeneralDownloadSpeed(ctx, firstResolvedIP, downloadMB, 10*time.Second)
 		if err == nil {
 			res.DownloadSpeed = speed
 		}
@@ -359,7 +417,6 @@ func isIranianPoisonedIP(ipStr string) bool {
 	return poisonSubnet.Contains(ip)
 }
 
-// متد کمکی برای تست فیزیکی دسترسی به دامنه‌های تحریم‌شده (۴۰۳) یا فیلترشده با آی‌پی حل‌شده
 func checkURLWithResolvedIP(ctx context.Context, domain, resolvedIP string, timeout time.Duration) (int, error) {
 	dialer := &net.Dialer{Timeout: timeout}
 	transport := &http.Transport{
@@ -374,7 +431,6 @@ func checkURLWithResolvedIP(ctx context.Context, domain, resolvedIP string, time
 		Timeout:   timeout,
 	}
 
-	// تست آدرس به صورت امن (HTTPS)
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://"+domain, nil)
 	if err != nil {
 		return 0, err
@@ -383,7 +439,6 @@ func checkURLWithResolvedIP(ctx context.Context, domain, resolvedIP string, time
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// در صورت بروز خطای لایه امنیتی، تلاش مجدد روی HTTP خام
 		reqHTTP, errHTTP := http.NewRequestWithContext(ctx, "GET", "http://"+domain, nil)
 		if errHTTP != nil {
 			return 0, errHTTP
@@ -507,14 +562,14 @@ func extractIPs(r *dns.Msg) []string {
 	return ips
 }
 
-func testSteamDownloadSpeed(ctx context.Context, resolvedIP string, downloadMB int, timeout time.Duration) (float64, error) {
+// اصلاح و بهینه‌سازی نهایی تست سرعت: استفاده از CDN کلادفلر بر بستر HTTP برای ثبات حداکثری بدون خطای گواهینامه یا مسدودسازی
+func testGeneralDownloadSpeed(ctx context.Context, resolvedIP string, downloadMB int, timeout time.Duration) (float64, error) {
 	dialer := &net.Dialer{Timeout: timeout}
 	transport := &http.Transport{
 		DialContext: func(cCtx context.Context, network, addr string) (net.Conn, error) {
 			_, port, _ := net.SplitHostPort(addr)
 			return dialer.DialContext(cCtx, network, net.JoinHostPort(resolvedIP, port))
 		},
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	client := &http.Client{
@@ -522,7 +577,8 @@ func testSteamDownloadSpeed(ctx context.Context, resolvedIP string, downloadMB i
 		Timeout:   timeout,
 	}
 
-	testURL := "https://media.steampowered.com/apps/valvesoftware/Valve_Software_Logo.png"
+	// استفاده از فایل تست ۱ مگابایتی یا بیشتر بر بستر HTTP خام پورت ۸۰ جهت دور زدن تمام فیلترهای SNI
+	testURL := fmt.Sprintf("http://speed.cloudflare.com/__down?bytes=%d", downloadMB*1024*1024)
 	
 	startTime := time.Now()
 	resp, err := client.Get(testURL)
