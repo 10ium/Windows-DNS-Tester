@@ -1,0 +1,12 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "my-dns-tester",
+  "outputfilename": "my-dns-tester",
+  "frontend:dir": "frontend",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "GitHub Actions",
+    "email": "actions@github.com"
+  }
+}
