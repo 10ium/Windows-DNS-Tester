@@ -84,7 +84,6 @@
                     </div>
                 </div>
 
-                <!-- کنترل هوشمند دکمه‌ها (تغییر از اجرای بررسی به لغو عملیات بر اساس وضعیت در حال تست) -->
                 <template x-if="!isTesting">
                     <button @click="startTesting()" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition flex items-center justify-center gap-2">
                         <span x-text="t[lang].runTests"></span>
@@ -100,13 +99,38 @@
         </div>
 
         <div class="md:col-span-2 space-y-4">
-            <template x-if="results.length === 0">
+            
+            <!-- نوار پیشرفت درصدی و وضعیت لود زنده در بالای کارت‌ها -->
+            <template x-if="isTesting">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-md">
+                    <div class="flex justify-between items-center mb-2 text-xs">
+                        <span class="font-bold text-indigo-500" x-text="progressText"></span>
+                        <span class="font-bold text-slate-500" x-text="progressPercent + '%'"></span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-900 h-2 rounded-full overflow-hidden">
+                        <div class="bg-indigo-600 h-full transition-all duration-300 rounded-full" :style="'width: ' + progressPercent + '%'"></div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- دکمه اعمال جادویی بهترین دی‌ان‌اس‌ها به عنوان سیستم دی‌ان‌اس اصلی ویندوز -->
+            <template x-if="results.length >= 1">
+                <div class="flex justify-between items-center p-4 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 shadow-md">
+                    <span class="text-xs font-bold text-indigo-400" x-text="t[lang].applyBestDnsDesc"></span>
+                    <button @click="applyBestTwoDNS()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-4 rounded-xl shadow transition">
+                        <span x-text="t[lang].applyBestDns"></span>
+                    </button>
+                </div>
+            </template>
+
+            <template x-if="results.length === 0 && !isTesting">
                 <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl text-center border border-slate-200 dark:border-slate-700/50">
                     <svg class="w-16 h-16 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.656 48.656 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7C4.547 9.547 4.5 10.768 4.5 12s.047 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.092-1.209.138-2.43.138-3.662z"/></svg>
                     <p class="text-slate-400 text-sm" x-text="t[lang].noResults"></p>
                 </div>
             </template>
 
+            <!-- رندر زنده و آنی کارت‌های نتایج دی‌ان‌اس‌ها به محض آماده شدن هر دی‌ان‌اس -->
             <template x-for="res in results">
                 <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700/50 hover:border-indigo-500 transition-all">
                     <div class="flex justify-between items-center mb-4">
@@ -114,9 +138,14 @@
                             <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400" x-text="res.protocol"></span>
                             <span class="font-bold font-mono text-sm md:text-base" x-text="res.ip"></span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-slate-400" x-text="t[lang].score"></span>
-                            <span class="text-xl font-black text-indigo-500" x-text="res.score"></span>
+                        <div class="flex items-center gap-3">
+                            <!-- دکمه ست کردن تکی همین دی‌ان‌اس روی کارت شبکه سیستم -->
+                            <button @click="applySingleDNS(res.ip)" class="text-[11px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 px-3 py-1.5 border border-indigo-500/20 rounded-xl transition font-bold" x-text="t[lang].setAsSystem"></button>
+                            
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs text-slate-400" x-text="t[lang].score"></span>
+                                <span class="text-xl font-black text-indigo-500" x-text="res.score"></span>
+                            </div>
                         </div>
                     </div>
 
@@ -133,7 +162,6 @@
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/30">
                         <template x-for="site in res.site_results">
-                            <!-- طراحی کارت‌ها بر اساس ۳ متد رنگ‌آمیزی متمایز جهت تفکیک ملموس "فیلتر" از "تحریم" -->
                             <div class="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 flex flex-col justify-between text-[11px]">
                                 <span class="font-medium text-slate-500 dark:text-slate-400 truncate" x-text="site.domain"></span>
                                 <span class="font-bold mt-1" 
@@ -170,6 +198,10 @@
                 results: [],
                 bootstrapDNS: '1.1.1.1, 8.8.8.8',
                 targetDomainsRaw: 'chatgpt.com\ngemini.google.com\nclaude.ai\ngrok.com\nx.com\ntwitter.com\nstore.steampowered.com\nsteamcommunity.com\nepicgames.com\ngithub.com\nyoutube.com',
+                
+                // متغیرهای نوار پیشرفت جدید
+                progressPercent: 0,
+                progressText: '',
 
                 t: {
                     fa: {
@@ -181,7 +213,7 @@
                         testing: "در حال بررسی شبکه...",
                         score: "امتیاز هوشمند",
                         latency: "میانگین تاخیر",
-                        speed: "سرعت دانلود استیم",
+                        speed: "سرعت دانلود کلادفلر",
                         settings: "تنظیمات پیشرفته ترافیک",
                         bootstrapLabel: "دی‌ان‌اس‌های راه انداز (با ویرگول جدا کنید):",
                         editDomainsLabel: "لیست دامنه‌های تست (قابل ویرایش):",
@@ -193,7 +225,12 @@
                         Sanctioned: "تحریم شده (۴۰۳)",
                         Poisoned: "مسدود/فیلتر شده",
                         Failed: "خطای اتصال",
-                        noResults: "هیچ تستی انجام نشده است. ابتدا آدرس‌های دی‌ان‌اس را وارد کنید و دکمه شروع را بزنید."
+                        noResults: "هیچ تستی انجام نشده است. ابتدا آدرس‌های دی‌ان‌اس را وارد کنید و دکمه شروع را بزنید.",
+                        setAsSystem: "ست کردن رو سیستم",
+                        applyBestDns: "اعمال خودکار دو دی‌ان‌اس برتر",
+                        applyBestDnsDesc: "آیا مایلید دو تا از بهترین دی‌ان‌اس‌های تست شده بالا روی تمام کارت‌های شبکه شما اعمال شوند؟",
+                        successAlert: "تغییرات با موفقیت اعمال شد.",
+                        errorAlert: "خطا در اعمال تغییرات (لطفاً برنامه را به صورت Run as Administrator اجرا کنید)."
                     },
                     en: {
                         title: "Smart DNS Tester",
@@ -204,7 +241,7 @@
                         testing: "Diagnosing...",
                         score: "Smart Score",
                         latency: "Avg Latency",
-                        speed: "Steam Download Speed",
+                        speed: "Cloudflare Download Speed",
                         settings: "Advanced Test Parameters",
                         bootstrapLabel: "Bootstrap DNS (comma-separated):",
                         editDomainsLabel: "Target Test Domains (Editable):",
@@ -216,13 +253,38 @@
                         Sanctioned: "Sanctioned (403)",
                         Poisoned: "Blocked/Poisoned",
                         Failed: "Connection Failed",
-                        noResults: "No tests run yet. Insert DNS addresses and click Run."
+                        noResults: "No tests run yet. Insert DNS addresses and click Run.",
+                        setAsSystem: "Apply to System",
+                        applyBestDns: "Apply Best 2 DNS",
+                        applyBestDnsDesc: "Do you want to automatically apply the top 2 DNS servers on all active interfaces?",
+                        successAlert: "DNS servers successfully set.",
+                        errorAlert: "Failed to apply DNS (Please Run as Administrator)."
                     }
                 },
 
                 init() {
                     if (window.go && window.go.main && window.go.main.App) {
                         window.go.main.App.GetVersion().then(v => this.version = v);
+                    }
+
+                    // شنود رویدادها از بک‌اند Go برای دریافت پاسخ زنده تکی کارت‌ها و نوار پیشرفت (مشابه Tauri)
+                    if (window.runtime) {
+                        // ۱. دریافت پاسخ‌های تکی زنده و چیدن آن‌ها در جدول بر اساس امتیاز نزولی
+                        window.runtime.EventsOn("dns-single-result", (res) => {
+                            this.results.push(res);
+                            this.results.sort((a, b) => b.score - a.score);
+                        });
+
+                        // ۲. دریافت اطلاعات لحظه‌ای نوار پیشرفت برای کاربر
+                        window.runtime.EventsOn("dns-test-progress", (prog) => {
+                            this.progressPercent = prog.percent;
+                            this.progressText = prog.status_text;
+                        });
+
+                        // ۳. اتمام نهایی عملیات
+                        window.runtime.EventsOn("dns-test-complete", () => {
+                            this.isTesting = false;
+                        });
                     }
                 },
 
@@ -243,6 +305,8 @@
                     if (this.isTesting) return;
                     this.isTesting = true;
                     this.results = [];
+                    this.progressPercent = 0;
+                    this.progressText = this.t[this.lang].testing;
 
                     const domainsArray = this.targetDomainsRaw.split('\n')
                         .map(d => d.trim())
@@ -261,30 +325,31 @@
 
                     try {
                         if (window.go && window.go.main && window.go.main.App) {
-                            let res = await window.go.main.App.RunDNSTests(requestPayload);
-                            res.sort((a, b) => b.score - a.score);
-                            this.results = res;
+                            // فرستادن اطلاعات اولیه؛ کارهای تست دیگر قفل‌کننده نیستند و رویدادهای زنده را شنود می‌کنیم
+                            await window.go.main.App.RunDNSTests(requestPayload);
                         } else {
-                            this.results = [
-                                {
-                                    protocol: 'DoH', ip: 'https://cloudflare-dns.com', avg_latency_ms: 22.4, jitter_ms: 1.2, download_speed_mbps: 92.5, score: 98,
-                                    site_results: [
-                                        { domain: 'chatgpt.com', status: 'Sanctioned' },
-                                        { domain: 'x.com', status: 'Safe' },
-                                        { domain: 'youtube.com', status: 'Poisoned' },
-                                        { domain: 'epicgames.com', status: 'Safe' }
-                                    ]
-                                }
-                            ];
+                            // نمونه دیتای تستی برای پیش‌نمایش در مرورگرهای وب خام خارج از ویندوز
+                            setTimeout(() => {
+                                this.results = [
+                                    {
+                                        protocol: 'DoH', ip: 'https://cloudflare-dns.com', avg_latency_ms: 22.4, jitter_ms: 1.2, download_speed_mbps: 92.5, score: 98,
+                                        site_results: [
+                                            { domain: 'chatgpt.com', status: 'Sanctioned' },
+                                            { domain: 'x.com', status: 'Safe' },
+                                            { domain: 'youtube.com', status: 'Poisoned' },
+                                            { domain: 'epicgames.com', status: 'Safe' }
+                                        ]
+                                    }
+                                ];
+                                this.isTesting = false;
+                            }, 2000);
                         }
                     } catch (e) {
                         console.error("Test execution failed:", e);
-                    } finally {
                         this.isTesting = false;
                     }
                 },
 
-                // پیاده‌سازی متد لغو آنی تسک‌ها در سطح فرانت‌اند متصل به هسته بک‌اند Go
                 async abortTesting() {
                     if (!this.isTesting) return;
                     try {
@@ -295,6 +360,32 @@
                         console.error("Failed to abort tasks:", e);
                     } finally {
                         this.isTesting = false;
+                    }
+                },
+
+                // متدهای اعمال دی‌ان‌اس روی کارت شبکه سیستم کاربر با استفاده از هسته بک‌اند Go
+                async applySingleDNS(ip) {
+                    if (!window.go || !window.go.main || !window.go.main.App) return;
+                    const res = await window.go.main.App.SetSystemDNS(ip, "");
+                    if (res === "success") {
+                        alert(this.t[this.lang].successAlert);
+                    } else {
+                        alert(this.t[this.lang].errorAlert);
+                    }
+                },
+
+                async applyBestTwoDNS() {
+                    if (this.results.length === 0 || !window.go || !window.go.main || !window.go.main.App) return;
+                    const primary = this.results[0].ip;
+                    let secondary = "";
+                    if (this.results.length >= 2) {
+                        secondary = this.results[1].ip;
+                    }
+                    const res = await window.go.main.App.SetSystemDNS(primary, secondary);
+                    if (res === "success") {
+                        alert(this.t[this.lang].successAlert);
+                    } else {
+                        alert(this.t[this.lang].errorAlert);
                     }
                 }
             }
