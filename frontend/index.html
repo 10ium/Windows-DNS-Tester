@@ -35,7 +35,6 @@
             transition: background-color 0.2s, border-color 0.2s;
         }
 
-        /* مدیریت تم تاریک و روشن */
         body.dark {
             background-color: var(--bg-dark);
             color: var(--text-dark);
@@ -49,7 +48,7 @@
         body[dir="ltr"] { text-align: left; }
 
         header {
-            border-b: 1px solid;
+            border-bottom: 1px solid;
             padding: 16px;
             display: flex;
             justify-content: space-between;
@@ -82,7 +81,6 @@
         body.light .btn-toggle { border-color: var(--border-light); color: var(--text-light); }
         .btn-toggle:hover { background-color: rgba(99, 102, 241, 0.1); }
 
-        /* ساختار گرید اصلی */
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -97,7 +95,6 @@
             }
         }
 
-        /* کارت‌ها */
         .card {
             border-radius: 16px;
             padding: 20px;
@@ -107,7 +104,6 @@
         body.dark .card { background-color: var(--bg-card-dark); border-color: var(--border-dark); }
         body.light .card { background-color: var(--bg-card-light); border-color: var(--border-light); }
 
-        /* فرم‌ها و ورودی‌ها */
         label {
             display: block;
             font-size: 13px;
@@ -127,7 +123,6 @@
         body.light textarea, body.light input { border-color: var(--border-light); color: var(--text-light); background-color: var(--bg-light); }
         textarea:focus, input:focus { border-color: var(--indigo); }
 
-        /* دکمه‌های کنترل پروتکل */
         .protocol-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -147,7 +142,6 @@
         body.light .btn-proto { border-color: var(--border-light); color: var(--text-light); }
         .btn-proto.active { background-color: var(--indigo); color: white; border-color: var(--indigo); }
 
-        /* بخش تنظیمات کشویی */
         .advanced-toggle {
             width: 100%;
             background: transparent;
@@ -166,15 +160,14 @@
             display: none;
             margin-top: 16px;
             padding-top: 16px;
-            border-t: 1px solid;
+            border-top: 1px solid;
             gap: 12px;
             flex-direction: column;
         }
-        body.dark .advanced-panel { border-top: 1px solid var(--border-dark); }
-        body.light .advanced-panel { border-top: 1px solid var(--border-light); }
+        body.dark .advanced-panel { border-top-color: var(--border-dark); }
+        body.light .advanced-panel { border-top-color: var(--border-light); }
         .advanced-panel.show { display: flex; }
 
-        /* دکمه‌های اصلی عیب‌یابی و لغو */
         .btn-action {
             width: 100%;
             padding: 12px;
@@ -196,7 +189,6 @@
         .btn-run:hover { background-color: var(--indigo-hover); }
         .btn-abort { background-color: var(--rose); }
 
-        /* نوار پیشرفت صوتی */
         .progress-container {
             padding: 16px;
             border-radius: 16px;
@@ -227,13 +219,11 @@
             transition: width 0.3s ease;
         }
 
-        /* پنل اعمال هوشمند دی‌ان‌اس‌ها */
         .magic-apply-panel {
             padding: 16px;
             border-radius: 16px;
             border: 1px solid;
             margin-bottom: 16px;
-            display: none;
             justify-content: space-between;
             align-items: center;
             gap: 16px;
@@ -253,7 +243,6 @@
         }
         .btn-magic:hover { background-color: var(--indigo-hover); }
 
-        /* خالی بودن نتایج */
         .empty-state {
             padding: 40px;
             text-align: center;
@@ -263,7 +252,6 @@
         body.dark .empty-state { border-color: var(--border-dark); color: var(--text-muted-dark); }
         body.light .empty-state { border-color: var(--border-light); color: var(--text-muted-light); }
 
-        /* کارت‌های دی‌ان‌اس‌های تست شده */
         .dns-card {
             padding: 20px;
             border-radius: 16px;
@@ -301,7 +289,6 @@
         body.dark .dns-card-meta { border-top-color: rgba(255,255,255,0.05); }
         body.light .dns-card-meta { border-top-color: rgba(0,0,0,0.05); }
 
-        /* دکمه ست کردن تکی سیستم */
         .btn-set-system {
             background-color: rgba(99, 102, 241, 0.1);
             color: var(--indigo);
@@ -314,7 +301,6 @@
         }
         .btn-set-system:hover { background-color: var(--indigo); color: white; border-color: var(--indigo); }
 
-        /* گرید وضعیت دامنه‌ها */
         .sites-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -341,7 +327,6 @@
         .site-domain { font-weight: 500; color: var(--text-muted-light); word-break: break-all; }
         body.dark .site-domain { color: var(--text-muted-dark); }
         
-        /* رنگ‌آمیزی متمایز ۳ وضعیت فیلتر، تحریم و باز */
         .status-safe { color: var(--emerald); font-weight: bold; }
         .status-sanctioned { color: var(--amber); font-weight: bold; }
         .status-poisoned { color: var(--rose); font-weight: 900; }
@@ -352,7 +337,7 @@
             font-size: 11px;
             color: var(--text-muted-light);
             padding: 24px;
-            border-t: 1px solid;
+            border-top: 1px solid;
             margin-top: 32px;
         }
         body.dark footer { border-top: 1px solid var(--border-dark); color: var(--text-muted-dark); }
@@ -363,7 +348,6 @@
 
     <header>
         <div class="header-logo">
-            <!-- آیکون با ابعاد فیزیکی ثابت ۳۲ پیکسل که هرگز در صورت خرابی CSS بزرگ نمی‌شود -->
             <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--indigo);">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
             </svg>
@@ -372,7 +356,6 @@
         <div class="header-buttons">
             <button id="btn-lang" class="btn-toggle" onclick="toggleLang()">English</button>
             <button id="btn-theme" class="btn-toggle" onclick="toggleTheme()">
-                <!-- آیکون تغییر تم مستقل -->
                 <svg id="svg-theme" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
                 </svg>
@@ -382,7 +365,6 @@
 
     <div class="container">
         
-        <!-- ستون سمت راست: تنظیمات -->
         <div class="card">
             <label id="lbl-dnsList" for="dnsListInput">لیست سرورهای DNS (هر کدام در یک خط):</label>
             <textarea id="dnsListInput" rows="8"></textarea>
@@ -428,7 +410,6 @@
                 </div>
             </div>
 
-            <!-- دکمه‌های شروع و لغو هوشمند -->
             <button id="btn-run" class="btn-action btn-run" onclick="startTesting()">شروع عیب‌یابی و آزمایش</button>
             <button id="btn-abort" class="btn-action btn-abort" style="display: none;" onclick="abortTesting()">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" class="spin-clockwise" style="animation: spin 1.5s linear infinite;">
@@ -438,9 +419,7 @@
             </button>
         </div>
 
-        <!-- ستون سمت چپ: نتایج بررسی شبکه به همراه نوار پیشرفت زنده -->
         <div>
-            <!-- نوار پیشرفت ملموس زنده -->
             <div id="progressContainer" class="progress-container" style="display: none;">
                 <div class="progress-header">
                     <span id="progressText">در حال عیب‌یابی...</span>
@@ -451,13 +430,12 @@
                 </div>
             </div>
 
-            <!-- پنل اعمال هوشمند دی‌ان‌اس‌ها روی ویندوز -->
-            <div id="magicApplyPanel" class="magic-apply-panel">
+            <!-- اصلاح هوشمند: مخفی بودن صددرصدی پنل اعمال در زمان لود اولیه -->
+            <div id="magicApplyPanel" class="magic-apply-panel" style="display: none;">
                 <span id="lbl-applyBestDesc" class="magic-apply-desc">آیا مایلید دو دی‌ان‌اس برتر شناسایی‌شده روی کارت شبکه فعال ویندوز تنظیم شوند؟</span>
                 <button id="btn-applyBest" class="btn-magic" onclick="applyBestTwoDNS()">اعمال خودکار</button>
             </div>
 
-            <!-- کادر نتایج -->
             <div id="resultsContainer">
                 <div id="emptyState" class="empty-state">
                     <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 12px;">
@@ -474,9 +452,7 @@
         Smart DNS Tester - Version <span id="txt-version">1.0.0</span>
     </footer>
 
-    <!-- منطق جاوااسکریپت فوق‌العاده پایدار و مستقل از CDN بومی -->
     <script>
-        // پایگاه داده ترجمه بومی
         const translations = {
             fa: {
                 title: "تست‌کننده هوشمند دی‌ان‌اس",
@@ -534,7 +510,6 @@
             }
         };
 
-        // متغیرهای وضعیت سراسری فرانت‌اند
         let lang = 'fa';
         let isDarkMode = true;
         let fallbackProtocol = 'Both';
@@ -542,12 +517,37 @@
         let isTesting = false;
         let results = [];
 
-        // مقادیر پیش‌فرض فیلدهای ورودی
         const defaultDnsList = "1.1.1.2\ntcp://1.1.1.3\nudp://1.1.1.1\nhttps://dns.google/dns-query\nhttps://cloudflare-dns.com/dns-query";
         const defaultBootstrapDNS = "1.1.1.1, 8.8.8.8";
         const defaultTargetDomains = "chatgpt.com\ngemini.google.com\nclaude.ai\ngrok.com\nx.com\ntwitter.com\nstore.steampowered.com\nsteamcommunity.com\nepicgames.com\ngithub.com\nyoutube.com";
 
-        // راه‌اندازی فرانت‌اند پس از لود شدن کامل صفحه
+        // اصلاح نهایی: مکانیزم ثبت مکرر (Polling) رویدادهای لایو دی‌ان‌اس تستر Wails
+        let checkWailsRuntime = setInterval(() => {
+            if (window.runtime) {
+                registerWailsEvents();
+                clearInterval(checkWailsRuntime);
+            }
+        }, 30);
+
+        function registerWailsEvents() {
+            window.runtime.EventsOn("dns-single-result", (res) => {
+                results.push(res);
+                results.sort((a, b) => b.score - a.score);
+                renderResultsHTML();
+            });
+
+            window.runtime.EventsOn("dns-test-progress", (prog) => {
+                document.getElementById('progressContainer').style.display = 'block';
+                document.getElementById('progressText').innerText = prog.status_text;
+                document.getElementById('progressPercent').innerText = prog.percent + '%';
+                document.getElementById('progressBarFill').style.width = prog.percent + '%';
+            });
+
+            window.runtime.EventsOn("dns-test-complete", () => {
+                setTestingState(false);
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('dnsListInput').value = defaultDnsList;
             document.getElementById('bootstrapDNSInput').value = defaultBootstrapDNS;
@@ -559,31 +559,6 @@
 
             updateLanguageUI();
 
-            // ارتباط با گیت‌های لایو Wails (Asynchronous)
-            if (window.runtime) {
-                // دریافت کارت‌های تکی بررسی شده به محض اتمام در ثانیه
-                window.runtime.EventsOn("dns-single-result", (res) => {
-                    results.push(res);
-                    // مرتب‌سازی هوشمند نزولی به محض تولید کارت جدید
-                    results.sort((a, b) => b.score - a.score);
-                    renderResultsHTML();
-                });
-
-                // دریافت داده‌های پیشرفت لایو درصدی
-                window.runtime.EventsOn("dns-test-progress", (prog) => {
-                    document.getElementById('progressContainer').style.display = 'block';
-                    document.getElementById('progressText').innerText = prog.status_text;
-                    document.getElementById('progressPercent').innerText = prog.percent + '%';
-                    document.getElementById('progressBarFill').style.width = prog.percent + '%';
-                });
-
-                // اعلان اتمام تست‌ها
-                window.runtime.EventsOn("dns-test-complete", () => {
-                    setTestingState(false);
-                });
-            }
-
-            // لود نسخه برنامه
             if (window.go && window.go.main && window.go.main.App) {
                 window.go.main.App.GetVersion().then(v => {
                     document.getElementById('txt-version').innerText = v;
@@ -669,6 +644,8 @@
                 document.getElementById('progressContainer').style.display = 'none';
                 if (results.length > 0) {
                     document.getElementById('magicApplyPanel').style.display = 'flex';
+                } else {
+                    document.getElementById('magicApplyPanel').style.display = 'none';
                 }
             }
         }
@@ -706,7 +683,6 @@
                 if (window.go && window.go.main && window.go.main.App) {
                     await window.go.main.App.RunDNSTests(requestPayload);
                 } else {
-                    // اجرای دمو فاقد بک‌اند وب جهت تست تمپلیت
                     simulateWebDemo();
                 }
             } catch (e) {
@@ -753,7 +729,6 @@
             }
         }
 
-        // رندر کامپوننت‌های کارت بر بستر Vanilla JS برای همگام‌سازی کامل آفلاین
         function renderResultsHTML() {
             const container = document.getElementById('resultsContainer');
             const t = translations[lang];
@@ -815,7 +790,6 @@
             container.innerHTML = html;
         }
 
-        // شبیه‌ساز زنده مرورگرهای لوکال بدون بایندی بک‌آند
         function simulateWebDemo() {
             let comp = 0;
             const interval = setInterval(() => {
