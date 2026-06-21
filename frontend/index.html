@@ -58,7 +58,6 @@
                 </button>
 
                 <div x-show="showAdvanced" x-transition class="mt-4 space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700/50">
-                    <!-- قابلیت جدید: ورودی دی‌ان‌اس‌های راه انداز قابل شخصی‌سازی توسط کاربر -->
                     <div>
                         <label class="block text-xs font-bold mb-1 text-indigo-500" x-text="t[lang].bootstrapLabel"></label>
                         <input type="text" x-model="bootstrapDNS" class="w-full p-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none">
@@ -85,12 +84,18 @@
                     </div>
                 </div>
 
-                <button @click="startTesting()" :disabled="isTesting" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 disabled:bg-slate-600 transition flex items-center justify-center gap-2">
-                    <template x-if="isTesting">
-                        <span class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span>
-                    </template>
-                    <span x-text="isTesting ? t[lang].testing : t[lang].runTests"></span>
-                </button>
+                <!-- کنترل هوشمند دکمه‌ها (تغییر از اجرای بررسی به لغو عملیات بر اساس وضعیت در حال تست) -->
+                <template x-if="!isTesting">
+                    <button @click="startTesting()" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+                        <span x-text="t[lang].runTests"></span>
+                    </button>
+                </template>
+                <template x-if="isTesting">
+                    <button @click="abortTesting()" class="w-full mt-6 bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-600/20 hover:shadow-rose-600/30 transition flex items-center justify-center gap-2">
+                        <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+                        <span x-text="t[lang].abortTests"></span>
+                    </button>
+                </template>
             </div>
         </div>
 
@@ -128,9 +133,14 @@
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/30">
                         <template x-for="site in res.site_results">
+                            <!-- طراحی کارت‌ها بر اساس ۳ متد رنگ‌آمیزی متمایز جهت تفکیک ملموس "فیلتر" از "تحریم" -->
                             <div class="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 flex flex-col justify-between text-[11px]">
                                 <span class="font-medium text-slate-500 dark:text-slate-400 truncate" x-text="site.domain"></span>
-                                <span class="font-bold mt-1" :class="site.status === 'Safe' ? 'text-emerald-500' : (site.status === 'Poisoned' ? 'text-rose-500' : 'text-slate-400')" x-text="t[lang][site.status]"></span>
+                                <span class="font-bold mt-1" 
+                                      :class="site.status === 'Safe' ? 'text-emerald-500' : 
+                                              (site.status === 'Sanctioned' ? 'text-amber-500' : 
+                                              (site.status === 'Poisoned' ? 'text-rose-600 font-extrabold' : 'text-slate-400'))" 
+                                      x-text="t[lang][site.status]"></span>
                             </div>
                         </template>
                     </div>
@@ -158,10 +168,7 @@
                 isTesting: false,
                 version: '1.0.0',
                 results: [],
-                
-                // مقدار اولیه دی‌ان‌اس‌های راه انداز
                 bootstrapDNS: '1.1.1.1, 8.8.8.8',
-
                 targetDomainsRaw: 'chatgpt.com\ngemini.google.com\nclaude.ai\ngrok.com\nx.com\ntwitter.com\nstore.steampowered.com\nsteamcommunity.com\nepicgames.com\ngithub.com\nyoutube.com',
 
                 t: {
@@ -170,6 +177,7 @@
                         dnsListLabel: "لیست سرورهای DNS (هر کدام در یک خط):",
                         fallbackLabel: "پروتکل دی‌ان‌اس‌های معمولی (بدون پیشوند):",
                         runTests: "شروع عیب‌یابی و آزمایش",
+                        abortTests: "لغو و توقف عملیات",
                         testing: "در حال بررسی شبکه...",
                         score: "امتیاز هوشمند",
                         latency: "میانگین تاخیر",
@@ -181,9 +189,10 @@
                         timeout: "مهلت اتصال (میلی‌ثانیه):",
                         pingCount: "تعداد تکرار بررسی پینگ:",
                         downloadSize: "حجم دانلود فایل تست (مگابایت):",
-                        Safe: "ایمن و باز",
-                        Poisoned: "مسموم/فیلتر شده",
-                        Failed: "قطع اتصال",
+                        Safe: "سالم و ایمن",
+                        Sanctioned: "تحریم شده (۴۰۳)",
+                        Poisoned: "مسدود/فیلتر شده",
+                        Failed: "خطای اتصال",
                         noResults: "هیچ تستی انجام نشده است. ابتدا آدرس‌های دی‌ان‌اس را وارد کنید و دکمه شروع را بزنید."
                     },
                     en: {
@@ -191,6 +200,7 @@
                         dnsListLabel: "DNS Server List (One per line):",
                         fallbackLabel: "Protocol for plain IPs (without prefix):",
                         runTests: "Run Network Diagnostics",
+                        abortTests: "Abort Operations",
                         testing: "Diagnosing...",
                         score: "Smart Score",
                         latency: "Avg Latency",
@@ -203,6 +213,7 @@
                         pingCount: "Ping Repeat count:",
                         downloadSize: "Download test size (MB):",
                         Safe: "Open & Safe",
+                        Sanctioned: "Sanctioned (403)",
                         Poisoned: "Blocked/Poisoned",
                         Failed: "Connection Failed",
                         noResults: "No tests run yet. Insert DNS addresses and click Run."
@@ -245,7 +256,7 @@
                         ping_count: this.pingCount,
                         download_mb: this.downloadMB,
                         target_domains: domainsArray,
-                        bootstrap_dns: this.bootstrapDNS // ارسال لیست به بک‌اند
+                        bootstrap_dns: this.bootstrapDNS
                     };
 
                     try {
@@ -258,9 +269,9 @@
                                 {
                                     protocol: 'DoH', ip: 'https://cloudflare-dns.com', avg_latency_ms: 22.4, jitter_ms: 1.2, download_speed_mbps: 92.5, score: 98,
                                     site_results: [
-                                        { domain: 'chatgpt.com', status: 'Safe' },
+                                        { domain: 'chatgpt.com', status: 'Sanctioned' },
                                         { domain: 'x.com', status: 'Safe' },
-                                        { domain: 'youtube.com', status: 'Safe' },
+                                        { domain: 'youtube.com', status: 'Poisoned' },
                                         { domain: 'epicgames.com', status: 'Safe' }
                                     ]
                                 }
@@ -268,6 +279,20 @@
                         }
                     } catch (e) {
                         console.error("Test execution failed:", e);
+                    } finally {
+                        this.isTesting = false;
+                    }
+                },
+
+                // پیاده‌سازی متد لغو آنی تسک‌ها در سطح فرانت‌اند متصل به هسته بک‌اند Go
+                async abortTesting() {
+                    if (!this.isTesting) return;
+                    try {
+                        if (window.go && window.go.main && window.go.main.App) {
+                            await window.go.main.App.AbortAllTasks();
+                        }
+                    } catch (e) {
+                        console.error("Failed to abort tasks:", e);
                     } finally {
                         this.isTesting = false;
                     }
